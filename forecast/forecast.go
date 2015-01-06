@@ -74,8 +74,8 @@ func forecast(loc location) (string, error) {
 	if len(endTimeNodes) > maxHours {
 		endTimeNodes = endTimeNodes[:maxHours]
 	}
-	startTime, _ := time.Parse(time.RFC3339, startTimeNodes[0].Value)
-	endTime, _ := time.Parse(time.RFC3339, endTimeNodes[len(endTimeNodes)-1].Value)
+	startTime, _ := time.Parse(time.RFC3339, startTimeNodes[0].GetValue())
+	endTime, _ := time.Parse(time.RFC3339, endTimeNodes[len(endTimeNodes)-1].GetValue())
 
 	temps := findVals("temperature", "hourly", doc)
 	humids := findVals("humidity", "", doc)
