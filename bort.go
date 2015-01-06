@@ -55,7 +55,9 @@ func main() {
 		con.Join(channel)
 	})
 	con.AddCallback("JOIN", func(e *irc.Event) {
-		lg.Println("joined", e.Message())
+		if e.Nick == nick {
+			lg.Println("joined", e.Message())
+		}
 	})
 	con.AddCallback("PRIVMSG", handlePrivMsg)
 	con.Loop()
