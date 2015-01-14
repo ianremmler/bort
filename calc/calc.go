@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"sort"
 	"strings"
 
 	"github.com/ianremmler/clac"
@@ -87,9 +88,19 @@ var (
 		"e":      func() error { return cl.Push(math.E) },
 		"phi":    func() error { return cl.Push(math.Phi) },
 	}
+	helpStr string
 )
 
-func Calc(input string) (string, error) {
+func init() {
+	cmdList := []string{"help"}
+	for cmd := range cmdMap {
+		cmdList = append(cmdList, cmd)
+	}
+	sort.Strings(cmdList)
+	helpStr = strings.Join(cmdList, " ")
+}
+
+func Calc(input string, isPub bool) (string, error) {
 	cl.Reset()
 	cmdReader := strings.NewReader(input)
 	for {
@@ -99,6 +110,12 @@ func Calc(input string) (string, error) {
 				return "", err
 			}
 			break
+		}
+		if tok == "help" {
+			if isPub {
+				return "", errors.New("Shhh, that's private...")
+			}
+			return helpStr, nil
 		}
 		num, err := clac.ParseNum(tok)
 		if err == nil {

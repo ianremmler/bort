@@ -98,7 +98,7 @@ func handlePrivMsg(evt *irc.Event) {
 			con.Privmsg(targ, line)
 		}
 	case "calc":
-		ans, err := calc.Calc(args)
+		ans, err := calc.Calc(args, targ == channel)
 		if err != nil {
 			con.Privmsg(targ, err.Error())
 			return
