@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/ianremmler/bort"
 	"github.com/jteeuwen/go-pkg-xmlx"
 	"golang.org/x/net/html/charset"
 )
@@ -33,27 +34,28 @@ type location struct {
 	Lon  string `json:"lon"`
 }
 
-func Forecast(text string) (string, error) {
-	loc := regexp.MustCompile("\\s+").ReplaceAllLiteralString(text, "+")
+func Forecast(msg *bort.Message, res *bort.Response) error {
+	loc := regexp.MustCompile("\\s+").ReplaceAllLiteralString(msg.Text, "+")
 	resp, err := http.Get(fmt.Sprintf(locUrlFmt, loc))
 	if err != nil {
-		return "", errLoc
+		return errLoc
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 {
-		return "", errLoc
+		return errLoc
 	}
 	dec := json.NewDecoder(resp.Body)
 	locs := []location{}
 	dec.Decode(&locs)
 	if len(locs) == 0 {
-		return "", errLoc
+		return errLoc
 	}
 	fc, err := forecast(locs[0])
 	if err != nil {
-		return "", errFc
+		return errFc
 	}
-	return fc, nil
+	res.Text = fc
+	return nil
 }
 
 func forecast(loc location) (string, error) {
@@ -171,4 +173,8 @@ func makeGraph(vals []int) (int, int, string) {
 		graph += string(firstOctile + octile)
 	}
 	return min, max, graph
+}
+
+func init() {
+	bort.Register("forecast", "asciitastic 2 day NWS forecast for a given location", Forecast)
 }

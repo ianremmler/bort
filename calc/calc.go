@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/ianremmler/bort"
 	"github.com/ianremmler/clac"
 )
 
@@ -102,54 +103,65 @@ func init() {
 	}
 	sort.Strings(cmdList)
 	helpStr = strings.Join(cmdList, " ")
+	bort.Register("calc", "RPN calculator", Calc)
 }
 
-func Calc(input string, isPub bool) (string, error) {
+func Calc(msg *bort.Message, res *bort.Response) error {
 	cl.Reset()
-	cmdReader := strings.NewReader(input)
+	cmdReader := strings.NewReader(msg.Text)
+	isHex := false
 	for {
 		tok := ""
 		if _, err := fmt.Fscan(cmdReader, &tok); err != nil {
 			if err != io.EOF {
-				return "", err
+				return err
 			}
 			break
 		}
-		if tok == "help" {
-			if isPub {
-				return "", errors.New("Shhh, that's private...")
-			}
-			return helpStr, nil
+		switch tok { // special cases
+		case "help":
+			res.Target = msg.Nick
+			res.Text = helpStr
+			return nil
+		case "hex":
+			isHex = true
+			continue
 		}
 		num, err := clac.ParseNum(tok)
 		if err == nil {
 			if err = cl.Exec(func() error { return cl.Push(num) }); err != nil {
-				return "", errors.New("push: " + err.Error())
+				return fmt.Errorf("push: %s", err)
 			}
 			continue
 		}
 		if cmd, ok := cmdMap[tok]; ok {
 			if err = cl.Exec(cmd); err != nil {
-				return "", errors.New(tok + ": " + err.Error())
+				return fmt.Errorf("calc: %s: invalid input", tok)
 			}
 			continue
 		}
-		return "", errors.New(tok + ": invalid input")
+		return fmt.Errorf("calc: %s: invalid input", tok)
 	}
 	stack := cl.Stack()
 	if len(stack) == 0 {
-		return "", errors.New("empty stack")
+		return errors.New("empty stack")
 	}
 	ans := ""
 	for i := range stack {
 		val := stack[len(stack)-i-1]
-		ans += fmt.Sprintf("%g", val)
-		if math.Abs(val) < math.MaxInt64 {
-			ans += fmt.Sprintf("(%#x)", int64(val))
+		if isHex {
+			if math.Abs(val) >= 1<<53 {
+				ans += "overflow"
+			} else {
+				ans += fmt.Sprintf("%#x", int64(val))
+			}
+		} else {
+			ans += fmt.Sprintf("%g", val)
 		}
 		if i < len(stack)-1 {
 			ans += " "
 		}
 	}
-	return ans, nil
+	res.Text = ans
+	return nil
 }

@@ -1,108 +1,136 @@
-package main
+package bort
 
 import (
-	"flag"
+	"bytes"
 	"fmt"
 	"log"
-	"os"
+	"net/rpc"
+	"sort"
 	"strings"
+	"text/tabwriter"
 
-	"github.com/ianremmler/bort/calc"
-	"github.com/ianremmler/bort/flip"
-	"github.com/ianremmler/bort/forecast"
 	"github.com/thoj/go-ircevent"
 )
 
 const (
-	cmdPrefix = "!"
-	table     = "┻━┻"
+	DefaultPort = 1234
+	cmdPrefix   = "!"
 )
 
 var (
-	nick    string
-	server  string
-	channel string
-	con     *irc.Connection
+	handlers = map[string]*Handler{}
+	event    = &Event{}
+	help     string
 )
 
-func main() {
-	lg := log.New(os.Stderr, "bort: ", 0)
+type ResponseType int
 
-	flag.Usage = func() {
-		fmt.Println("usage: bort [-n <nick>] [-s <server>] #channel")
-	}
-	flag.StringVar(&nick, "n", "bort", "nick of the bot")
-	flag.StringVar(&server, "s", "irc.freenode.net:6667", "IRC server")
-	flag.Parse()
+const (
+	None ResponseType = iota
+	Action
+	PrivMsg
+)
 
-	if flag.NArg() < 1 {
-		flag.Usage()
-		os.Exit(0)
-	}
-	channel = flag.Arg(0)
-	if !strings.HasPrefix(channel, "#") {
-		lg.Fatalf("%s is not a valid channel", channel)
-	}
+type Event struct{}
 
-	con = irc.IRC(nick, nick)
-	con.Log = lg
-	err := con.Connect(server)
-	if err != nil {
-		lg.Fatalln(err)
+func (e *Event) Process(msg *Message, res *Response) error {
+	res.Type = PrivMsg
+	res.Target = msg.Target
+	if msg.Command == "help" {
+		res.Type = PrivMsg
+		res.Target = msg.Nick
+		res.Text = help
+		return nil
 	}
-
-	con.AddCallback("001", func(e *irc.Event) {
-		con.Join(channel)
-	})
-	con.AddCallback("JOIN", func(e *irc.Event) {
-		if e.Nick == nick {
-			lg.Println("joined", e.Message())
-		}
-	})
-	con.AddCallback("PRIVMSG", handlePrivMsg)
-	con.Loop()
+	if handler, ok := handlers[msg.Command]; ok {
+		return handler.handle(msg, res)
+	}
+	return nil
 }
 
-func handlePrivMsg(evt *irc.Event) {
-	text := strings.TrimSpace(evt.Message())
-	if !strings.HasPrefix(text, cmdPrefix) {
-		return
-	}
-	cmdStr := text[1:] + " " // append space to ensure splitN returns 2 strings
-	cmdAndArgs := strings.SplitN(cmdStr, " ", 2)
-	if len(cmdAndArgs) < 2 { // shouldn't happen
-		return
-	}
-	cmd, args := cmdAndArgs[0], strings.TrimSpace(cmdAndArgs[1])
+type Message struct {
+	Channel string
+	Command string
+	Host    string
+	Nick    string
+	Raw     string
+	Source  string
+	Target  string
+	Text    string
+	User    string
+}
 
-	targ := channel
-	if evt.Arguments[0] != channel {
-		targ = evt.Nick
+func NewMessage(channel string, evt *irc.Event) *Message {
+	msg := &Message{
+		Channel: channel,
+		Host:    evt.Host,
+		Nick:    evt.Nick,
+		Raw:     evt.Raw,
+		Source:  evt.Source,
+		Target:  channel,
+		Command: "*",
+		Text:    evt.Message(),
+		User:    evt.User,
 	}
-	switch cmd {
-	case "flip":
-		flipped := ""
-		if len(args) > 0 {
-			flipped = flip.Flip(args)
-		} else {
-			flipped = table
+
+	text := strings.TrimSpace(evt.Message())
+	if strings.HasPrefix(text, cmdPrefix) {
+		cmdStr := text[1:] + " " // append space to ensure SplitN returns 2 strings
+		cmdAndArgs := strings.SplitN(cmdStr, " ", 2)
+		if len(cmdAndArgs) == 2 {
+			msg.Command = cmdAndArgs[0]
+			msg.Text = strings.TrimSpace(cmdAndArgs[1])
 		}
-		con.Privmsg(targ, "(ノಠ益ಠ)ノ彡 "+flipped)
-	case "forecast":
-		fc, err := forecast.Forecast(args)
-		if err != nil {
-			con.Privmsg(targ, err.Error())
-			return
-		}
-		for _, line := range strings.Split(fc, "\n") {
-			con.Privmsg(targ, line)
-		}
-	case "calc":
-		ans, err := calc.Calc(args, targ == channel)
-		if err != nil {
-			con.Privmsg(targ, err.Error())
-			return
-		}
-		con.Privmsg(targ, ans)
+	}
+	if evt.Arguments[0] != channel {
+		msg.Target = evt.Nick
+	}
+	return msg
+}
+
+type Response struct {
+	Type   ResponseType
+	Target string
+	Text   string
+}
+
+func NewResponse() *Response {
+	return &Response{}
+}
+
+type HandleFunc func(msg *Message, res *Response) error
+
+type Handler struct {
+	handle HandleFunc
+	help   string
+}
+
+func Register(cmd, help string, handle HandleFunc) error {
+	if _, ok := handlers[cmd]; ok {
+		return fmt.Errorf("%s: handler already registered", cmd)
+	}
+	handlers[cmd] = &Handler{help: help, handle: handle}
+	return nil
+}
+
+func Init() {
+	buf := &bytes.Buffer{}
+	tabWrite := tabwriter.NewWriter(buf, 2, 0, 1, ' ', 0)
+	cmds := sort.StringSlice{}
+	for cmd := range handlers {
+		cmds = append(cmds, cmd)
+	}
+	cmds.Sort()
+	for _, cmd := range cmds {
+		fmt.Fprintf(tabWrite, "%s:\t%s\n", cmd, handlers[cmd].help)
+	}
+	tabWrite.Flush()
+	help = buf.String()
+}
+
+func init() {
+	err := rpc.Register(event)
+	if err != nil {
+		log.Fatal(err)
 	}
 }
