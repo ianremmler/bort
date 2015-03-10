@@ -176,5 +176,5 @@ func makeGraph(vals []int) (int, int, string) {
 }
 
 func init() {
-	bort.Register("forecast", "asciitastic 2 day NWS forecast for a given location", Forecast)
+	bort.RegisterCommand("forecast", "asciitastic 2 day NWS forecast for a given location", Forecast)
 }

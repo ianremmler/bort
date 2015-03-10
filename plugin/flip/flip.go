@@ -49,7 +49,7 @@ func init() {
 	for k, v := range flipTable {
 		flipTable[v] = k
 	}
-	bort.Register("flip", "flip text (or tables by default)", Flip)
+	bort.RegisterCommand("flip", "flip text (or tables by default)", Flip)
 }
 
 func Flip(msg *bort.Message, res *bort.Response) error {

@@ -5,20 +5,18 @@ import (
 	"fmt"
 	"log"
 	"net/rpc"
+	"regexp"
 	"sort"
-	"strings"
 	"text/tabwriter"
-
-	"github.com/thoj/go-ircevent"
 )
 
 const (
 	DefaultPort = 1234
-	cmdPrefix   = "!"
 )
 
 var (
-	handlers = map[string]*Handler{}
+	commands = map[string]*command{}
+	matchers = []*matcher{}
 	event    = &Event{}
 	help     string
 )
@@ -41,8 +39,20 @@ func (e *Event) Process(msg *Message, res *Response) error {
 		res.Text = help
 		return nil
 	}
-	if handler, ok := handlers[msg.Command]; ok {
-		return handler.handle(msg, res)
+	if cmd, ok := commands[msg.Command]; ok {
+		return cmd.handle(msg, res)
+	}
+	for _, mtch := range matchers {
+		matches := mtch.re.FindStringSubmatch(msg.Text)
+		idx := len(matches) - 1
+		if idx < 0 {
+			continue
+		}
+		if idx > 1 {
+			idx = 1
+		}
+		msg.Match = matches[idx]
+		return mtch.handle(msg, res)
 	}
 	return nil
 }
@@ -51,6 +61,7 @@ type Message struct {
 	Channel string
 	Command string
 	Host    string
+	Match   string
 	Nick    string
 	Raw     string
 	Source  string
@@ -59,56 +70,38 @@ type Message struct {
 	User    string
 }
 
-func NewMessage(channel string, evt *irc.Event) *Message {
-	msg := &Message{
-		Channel: channel,
-		Host:    evt.Host,
-		Nick:    evt.Nick,
-		Raw:     evt.Raw,
-		Source:  evt.Source,
-		Target:  channel,
-		Command: "*",
-		Text:    evt.Message(),
-		User:    evt.User,
-	}
-
-	text := strings.TrimSpace(evt.Message())
-	if strings.HasPrefix(text, cmdPrefix) {
-		cmdStr := text[1:] + " " // append space to ensure SplitN returns 2 strings
-		cmdAndArgs := strings.SplitN(cmdStr, " ", 2)
-		if len(cmdAndArgs) == 2 {
-			msg.Command = cmdAndArgs[0]
-			msg.Text = strings.TrimSpace(cmdAndArgs[1])
-		}
-	}
-	if evt.Arguments[0] != channel {
-		msg.Target = evt.Nick
-	}
-	return msg
-}
-
 type Response struct {
 	Type   ResponseType
 	Target string
 	Text   string
 }
 
-func NewResponse() *Response {
-	return &Response{}
-}
-
 type HandleFunc func(msg *Message, res *Response) error
 
-type Handler struct {
+type command struct {
 	handle HandleFunc
 	help   string
 }
 
-func Register(cmd, help string, handle HandleFunc) error {
-	if _, ok := handlers[cmd]; ok {
-		return fmt.Errorf("%s: handler already registered", cmd)
+type matcher struct {
+	re     *regexp.Regexp
+	handle HandleFunc
+}
+
+func RegisterCommand(cmd, help string, handle HandleFunc) error {
+	if _, ok := commands[cmd]; ok {
+		return fmt.Errorf("%s: command already registered", cmd)
 	}
-	handlers[cmd] = &Handler{help: help, handle: handle}
+	commands[cmd] = &command{help: help, handle: handle}
+	return nil
+}
+
+func RegisterMatcher(match string, handle HandleFunc) error {
+	re, err := regexp.Compile(match)
+	if err != nil {
+		return err
+	}
+	matchers = append(matchers, &matcher{re: re, handle: handle})
 	return nil
 }
 
@@ -116,12 +109,12 @@ func Init() {
 	buf := &bytes.Buffer{}
 	tabWrite := tabwriter.NewWriter(buf, 2, 0, 1, ' ', 0)
 	cmds := sort.StringSlice{}
-	for cmd := range handlers {
+	for cmd := range commands {
 		cmds = append(cmds, cmd)
 	}
 	cmds.Sort()
 	for _, cmd := range cmds {
-		fmt.Fprintf(tabWrite, "%s:\t%s\n", cmd, handlers[cmd].help)
+		fmt.Fprintf(tabWrite, "%s:\t%s\n", cmd, commands[cmd].help)
 	}
 	tabWrite.Flush()
 	help = buf.String()

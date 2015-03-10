@@ -103,7 +103,7 @@ func init() {
 	}
 	sort.Strings(cmdList)
 	helpStr = strings.Join(cmdList, " ")
-	bort.Register("calc", "RPN calculator", Calc)
+	bort.RegisterCommand("calc", "RPN calculator", Calc)
 }
 
 func Calc(msg *bort.Message, res *bort.Response) error {

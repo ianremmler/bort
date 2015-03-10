@@ -13,18 +13,15 @@ import (
 	"github.com/thoj/go-ircevent"
 )
 
-const (
-	cmdPrefix = "!"
-)
-
 var (
-	nick     string
-	server   string
-	plugAddr string
-	channel  string
-	con      *irc.Connection
-	client   *rpc.Client
-	lg       = log.New(os.Stderr, "bort: ", log.Ldate|log.Ltime)
+	nick      string
+	server    string
+	plugAddr  string
+	channel   string
+	cmdPrefix string
+	con       *irc.Connection
+	client    *rpc.Client
+	lg        = log.New(os.Stderr, "bort: ", log.Ldate|log.Ltime)
 )
 
 func connectPlug() error {
@@ -43,11 +40,12 @@ func connectPlug() error {
 
 func init() {
 	flag.Usage = func() {
-		fmt.Println("usage: bort [-n <nick>] [-s <server>] [-p <addr>] #channel")
+		fmt.Println("usage: bort [-n <nick>] [-s <server>] [-p <addr>] [-c <prefix>] #channel")
 	}
 	flag.StringVar(&nick, "n", "bort", "nick of the bot")
 	flag.StringVar(&server, "s", "irc.freenode.net:6667", "IRC server")
 	flag.StringVar(&plugAddr, "p", ":1234", "bortplug address")
+	flag.StringVar(&cmdPrefix, "c", "bort:", "command prefix")
 }
 
 func main() {
@@ -84,14 +82,14 @@ func main() {
 }
 
 func handleEvent(evt *irc.Event) {
-	msg := bort.NewMessage(channel, evt)
-	resp := bort.NewResponse()
+	msg := newMessage(evt)
+	res := &bort.Response{}
 	if client == nil {
 		if connectPlug() != nil {
 			return
 		}
 	}
-	if err := client.Call("Event.Process", msg, resp); err != nil {
+	if err := client.Call("Event.Process", msg, res); err != nil {
 		lg.Println(err)
 		switch err {
 		case rpc.ErrShutdown, io.EOF, io.ErrUnexpectedEOF:
@@ -99,15 +97,42 @@ func handleEvent(evt *irc.Event) {
 		}
 		return
 	}
-	switch resp.Type {
+	switch res.Type {
 	case bort.None:
 	case bort.PrivMsg:
-		for _, str := range strings.Split(strings.TrimRight(resp.Text, "\n"), "\n") {
-			con.Privmsg(resp.Target, str)
+		for _, str := range strings.Split(strings.TrimRight(res.Text, "\n"), "\n") {
+			con.Privmsg(res.Target, str)
 		}
 	case bort.Action:
-		con.Action(resp.Target, strings.SplitN(resp.Text, "\n", 2)[0])
+		con.Action(res.Target, strings.SplitN(res.Text, "\n", 2)[0])
 	default:
 		lg.Println("error: unknown response type")
 	}
+}
+
+func newMessage(evt *irc.Event) *bort.Message {
+	msg := &bort.Message{
+		Channel: channel,
+		Host:    evt.Host,
+		Nick:    evt.Nick,
+		Raw:     evt.Raw,
+		Source:  evt.Source,
+		Target:  channel,
+		Text:    evt.Message(),
+		User:    evt.User,
+	}
+	text := strings.TrimSpace(evt.Message())
+	if strings.HasPrefix(text, cmdPrefix) {
+		cmdStr := strings.TrimLeft(text[len(cmdPrefix):], " ")
+		cmdStr += " " // append space to ensure SplitN returns 2 strings
+		cmdAndArgs := strings.SplitN(cmdStr, " ", 2)
+		if len(cmdAndArgs) == 2 {
+			msg.Command = cmdAndArgs[0]
+			msg.Text = strings.TrimSpace(cmdAndArgs[1])
+		}
+	}
+	if evt.Arguments[0] != channel {
+		msg.Target = evt.Nick
+	}
+	return msg
 }
