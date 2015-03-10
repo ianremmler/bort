@@ -37,7 +37,6 @@ func (e *Event) Process(msg *Message, res *Response) error {
 	res.Type = PrivMsg
 	res.Target = msg.Target
 	if msg.Command == "help" {
-		res.Type = PrivMsg
 		res.Target = msg.Nick
 		res.Text = help
 		return nil
