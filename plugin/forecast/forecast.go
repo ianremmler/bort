@@ -16,8 +16,8 @@ import (
 )
 
 const (
-	fcUrlFmt    = "http://forecast.weather.gov/MapClick.php?lat=%s&lon=%s&FcstType=digitalDWML"
-	locUrlFmt   = "http://nominatim.openstreetmap.org/search?format=json&limit=1&q=%s"
+	fcURLFmt    = "http://forecast.weather.gov/MapClick.php?lat=%s&lon=%s&FcstType=digitalDWML"
+	locURLFmt   = "http://nominatim.openstreetmap.org/search?format=json&limit=1&q=%s"
 	arrows      = "↑↗→↘↓↙←↖"
 	firstOctile = 0x2581
 	maxHours    = 48
@@ -36,7 +36,7 @@ type location struct {
 
 func Forecast(msg *bort.Message, res *bort.Response) error {
 	loc := regexp.MustCompile("\\s+").ReplaceAllLiteralString(msg.Text, "+")
-	resp, err := http.Get(fmt.Sprintf(locUrlFmt, loc))
+	resp, err := http.Get(fmt.Sprintf(locURLFmt, loc))
 	if err != nil {
 		return errLoc
 	}
@@ -60,7 +60,7 @@ func Forecast(msg *bort.Message, res *bort.Response) error {
 
 func forecast(loc location) (string, error) {
 	doc := xmlx.New()
-	url := fmt.Sprintf(fcUrlFmt, loc.Lat, loc.Lon)
+	url := fmt.Sprintf(fcURLFmt, loc.Lat, loc.Lon)
 	err := doc.LoadUri(url, func(str string, rdr io.Reader) (io.Reader, error) {
 		return charset.NewReader(rdr, str)
 	})

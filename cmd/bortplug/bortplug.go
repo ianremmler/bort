@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -13,23 +14,26 @@ import (
 )
 
 var (
-	lg       = log.New(os.Stderr, "bortplug: ", log.Ldate|log.Ltime)
-	event    = &bort.Event{}
-	plugAddr string
+	// flags
+	address string
+	cfgFile string
+
+	lg  = log.New(os.Stderr, "bortplug: ", log.Ldate|log.Ltime)
+	cfg Config
+
+	event = &bort.Event{}
 )
 
-func init() {
-	flag.Usage = func() {
-		fmt.Println("usage: bortplug [-p <addr>]")
-	}
-	flag.StringVar(&plugAddr, "p", ":1234", "bortplug address")
+type Config struct {
+	Address string `json:"address"`
 }
 
 func main() {
 	flag.Parse()
-	bort.Init()
+	config()
+	bort.SetupPlugins()
 
-	listen, err := net.Listen("tcp", plugAddr)
+	listen, err := net.Listen("tcp", cfg.Address)
 	if err != nil {
 		lg.Fatalln(err)
 	}
@@ -44,4 +48,33 @@ func main() {
 		rpc.ServeConn(con)
 		lg.Println("disconnected from bort")
 	}
+}
+
+func config() {
+	cfgData, err := bort.LoadConfig(cfgFile)
+	if err != nil {
+		lg.Printf("could not read config file: %s\n", cfgFile)
+	}
+	if err := json.Unmarshal(cfgData, &cfg); err != nil {
+		lg.Println(err)
+	}
+	flag.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "a":
+			cfg.Address = address
+		}
+	})
+}
+
+func init() {
+	err := rpc.Register(event)
+	if err != nil {
+		log.Fatal(err)
+	}
+	flag.Usage = func() {
+		fmt.Println("usage: bortplug [<options>]")
+		flag.PrintDefaults()
+	}
+	flag.StringVar(&address, "a", ":1234", "bortplug address")
+	flag.StringVar(&cfgFile, "c", "", "configuration file")
 }

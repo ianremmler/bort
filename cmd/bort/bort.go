@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -14,43 +15,31 @@ import (
 )
 
 var (
-	nick      string
-	server    string
-	plugAddr  string
-	channel   string
-	cmdPrefix string
-	con       *irc.Connection
-	client    *rpc.Client
-	lg        = log.New(os.Stderr, "bort: ", log.Ldate|log.Ltime)
+	// flags
+	nick    string
+	server  string
+	address string
+	channel string
+	prefix  string
+	cfgFile string
+
+	lg  = log.New(os.Stderr, "bort: ", log.Ldate|log.Ltime)
+	cfg Config
+
+	con    *irc.Connection
+	client *rpc.Client
 )
 
-func connectPlug() error {
-	var err error
-	if client != nil {
-		client.Close()
-	}
-	client, err = rpc.Dial("tcp", plugAddr)
-	if err == nil {
-		lg.Println("connected to bortplug")
-	} else {
-		lg.Println(err)
-	}
-	return err
-}
-
-func init() {
-	flag.Usage = func() {
-		fmt.Println("usage: bort [-n <nick>] [-s <server>] [-p <addr>] [-c <prefix>] #channel")
-	}
-	flag.StringVar(&nick, "n", "bort", "nick of the bot")
-	flag.StringVar(&server, "s", "irc.freenode.net:6667", "IRC server")
-	flag.StringVar(&plugAddr, "p", ":1234", "bortplug address")
-	flag.StringVar(&cmdPrefix, "c", "bort:", "command prefix")
+type Config struct {
+	Nick    string `json:"nick"`
+	Server  string `json:"server"`
+	Address string `json:"address"`
+	Channel string `json:"channel"`
+	Prefix  string `json:"prefix"`
 }
 
 func main() {
 	flag.Parse()
-
 	if flag.NArg() < 1 {
 		flag.Usage()
 		os.Exit(0)
@@ -59,6 +48,8 @@ func main() {
 	if !strings.HasPrefix(channel, "#") {
 		lg.Fatalf("error: %s is not a valid channel\n", channel)
 	}
+
+	config()
 
 	con = irc.IRC(nick, nick)
 	con.Log = lg
@@ -122,8 +113,8 @@ func newMessage(evt *irc.Event) *bort.Message {
 		User:    evt.User,
 	}
 	text := strings.TrimSpace(evt.Message())
-	if strings.HasPrefix(text, cmdPrefix) {
-		cmdStr := strings.TrimLeft(text[len(cmdPrefix):], " ")
+	if strings.HasPrefix(text, cfg.Prefix) {
+		cmdStr := strings.TrimLeft(text[len(cfg.Prefix):], " ")
 		cmdStr += " " // append space to ensure SplitN returns 2 strings
 		cmdAndArgs := strings.SplitN(cmdStr, " ", 2)
 		if len(cmdAndArgs) == 2 {
@@ -135,4 +126,58 @@ func newMessage(evt *irc.Event) *bort.Message {
 		msg.Target = evt.Nick
 	}
 	return msg
+}
+
+func connectPlug() error {
+	var err error
+	if client != nil {
+		client.Close()
+	}
+	client, err = rpc.Dial("tcp", cfg.Address)
+	if err == nil {
+		lg.Println("connected to bortplug")
+	} else {
+		lg.Println(err)
+	}
+	return err
+}
+
+func config() {
+	cfgData, err := bort.LoadConfig(cfgFile)
+	if err != nil {
+		lg.Printf("could not read config file: %s\n", cfgFile)
+	}
+	if err := json.Unmarshal(cfgData, &cfg); err != nil {
+		lg.Println(err)
+	}
+	flag.Visit(func(f *flag.Flag) {
+		switch f.Name {
+		case "n":
+			cfg.Nick = nick
+		case "s":
+			cfg.Server = server
+		case "a":
+			cfg.Address = address
+		case "p":
+			cfg.Prefix = prefix
+		}
+	})
+}
+
+func init() {
+	cfg = Config{
+		Nick:    "bort",
+		Server:  "irc.freenode.net:6667",
+		Address: ":1234",
+		Prefix:  "bort:",
+	}
+	flag.Usage = func() {
+		fmt.Println("usage: bort [<options>] #channel")
+		flag.PrintDefaults()
+	}
+	flag.StringVar(&nick, "n", cfg.Nick, "nick of the bot")
+	flag.StringVar(&server, "s", cfg.Server, "IRC server")
+	flag.StringVar(&address, "a", cfg.Address, "bortplug address")
+	flag.StringVar(&prefix, "p", cfg.Prefix, "command prefix")
+	flag.StringVar(&cfgFile, "c", "", "configuration file")
 }

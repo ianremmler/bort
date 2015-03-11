@@ -3,22 +3,21 @@ package bort
 import (
 	"bytes"
 	"fmt"
-	"log"
-	"net/rpc"
+	"io/ioutil"
+	"os/user"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"text/tabwriter"
 )
 
-const (
-	DefaultPort = 1234
-)
-
 var (
-	commands = map[string]*command{}
-	matchers = []*matcher{}
-	event    = &Event{}
-	help     string
+	setupFuncs     = []func(cfgData []byte){}
+	commands       = map[string]*command{}
+	matchers       = []*matcher{}
+	help           string
+	configData     []byte
+	defaultCfgFile = "bort.conf"
 )
 
 type ResponseType int
@@ -88,6 +87,10 @@ type matcher struct {
 	handle HandleFunc
 }
 
+func RegisterSetup(fn func(cfgData []byte)) {
+	setupFuncs = append(setupFuncs, fn)
+}
+
 func RegisterCommand(cmd, help string, handle HandleFunc) error {
 	if _, ok := commands[cmd]; ok {
 		return fmt.Errorf("%s: command already registered", cmd)
@@ -105,7 +108,12 @@ func RegisterMatcher(match string, handle HandleFunc) error {
 	return nil
 }
 
-func Init() {
+func SetupPlugins() {
+	for _, fn := range setupFuncs {
+		fn(configData)
+	}
+	setupFuncs = nil
+
 	buf := &bytes.Buffer{}
 	tabWrite := tabwriter.NewWriter(buf, 2, 0, 1, ' ', 0)
 	cmds := sort.StringSlice{}
@@ -120,9 +128,19 @@ func Init() {
 	help = buf.String()
 }
 
-func init() {
-	err := rpc.Register(event)
+func LoadConfig(cfgFile string) ([]byte, error) {
+	if cfgFile == "" {
+		cfgFile = defaultCfgFile
+	}
+	cfgData, err := ioutil.ReadFile(cfgFile)
 	if err != nil {
-		log.Fatal(err)
+		configData = cfgData
+	}
+	return configData, err
+}
+
+func init() {
+	if usr, err := user.Current(); err == nil {
+		defaultCfgFile = filepath.Join(usr.HomeDir, ".config", "bort", defaultCfgFile)
 	}
 }
