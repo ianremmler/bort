@@ -21,7 +21,7 @@ var (
 
 var cfg = Config{
 	Address:    bort.DefaultAddress,
-	OutboxSize: 1024,
+	OutboxSize: 10,
 }
 
 type Config struct {

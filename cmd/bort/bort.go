@@ -206,6 +206,6 @@ func init() {
 	flag.StringVar(&flags.Channel, "c", cfg.Channel, "channel")
 	flag.StringVar(&flags.Address, "a", cfg.Address, "bortplug address")
 	flag.StringVar(&flags.Prefix, "p", cfg.Prefix, "command prefix")
-	flag.UintVar(&flags.PollPeriod, "t", cfg.PollPeriod, "poll period in seconds")
+	flag.UintVar(&flags.PollPeriod, "t", cfg.PollPeriod, "plugin push message poll period in seconds")
 	flag.StringVar(&cfgFile, "f", "", "configuration file")
 }
