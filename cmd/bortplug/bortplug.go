@@ -3,11 +3,9 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"fmt"
 	"log"
 	"net"
 	"net/rpc"
-	"os"
 	"time"
 
 	"github.com/ianremmler/bort"
@@ -15,66 +13,67 @@ import (
 
 var (
 	// flags
-	address string
+	flags   Config
 	cfgFile string
 
-	lg  = log.New(os.Stderr, "bortplug: ", log.Ldate|log.Ltime)
-	cfg Config
-
-	event = &bort.Event{}
+	plug = &bort.Plugin{}
 )
 
+var cfg = Config{
+	Address:    bort.DefaultAddress,
+	OutboxSize: 1024,
+}
+
 type Config struct {
-	Address string `json:"address"`
+	Address    string `json:"address"`
+	OutboxSize uint   `json:"outbox_size"`
 }
 
 func main() {
+	if err := rpc.Register(plug); err != nil {
+		log.Fatal(err)
+	}
+
 	flag.Parse()
 	config()
-	bort.SetupPlugins()
+
+	bort.PluginInit(cfg.OutboxSize)
 
 	listen, err := net.Listen("tcp", cfg.Address)
 	if err != nil {
-		lg.Fatalln(err)
+		log.Fatalln(err)
 	}
 	for {
 		con, err := listen.Accept()
 		if err != nil {
-			lg.Println(err)
+			log.Println(err)
 			time.Sleep(1 * time.Second)
 			break
 		}
-		lg.Println("connected to bort")
+		log.Println("connected to bort")
 		rpc.ServeConn(con)
-		lg.Println("disconnected from bort")
+		log.Println("disconnected from bort")
 	}
 }
 
 func config() {
-	cfgData, err := bort.LoadConfig(cfgFile)
-	if err != nil {
-		lg.Printf("could not read config file: %s\n", cfgFile)
-	}
-	if err := json.Unmarshal(cfgData, &cfg); err != nil {
-		lg.Println(err)
+	if cfgData, err := bort.LoadConfig(cfgFile); err != nil {
+		log.Println(err)
+	} else if err := json.Unmarshal(cfgData, &cfg); err != nil {
+		log.Println(err)
 	}
 	flag.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "a":
-			cfg.Address = address
+			cfg.Address = flags.Address
+		case "o":
+			cfg.OutboxSize = flags.OutboxSize
 		}
 	})
 }
 
 func init() {
-	err := rpc.Register(event)
-	if err != nil {
-		log.Fatal(err)
-	}
-	flag.Usage = func() {
-		fmt.Println("usage: bortplug [<options>]")
-		flag.PrintDefaults()
-	}
-	flag.StringVar(&address, "a", ":1234", "bortplug address")
+	flag.StringVar(&flags.Address, "a", cfg.Address, "bortplug address")
+	flag.UintVar(&flags.OutboxSize, "o", cfg.OutboxSize, "outbox size")
 	flag.StringVar(&cfgFile, "c", "", "configuration file")
 }

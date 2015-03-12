@@ -7,8 +7,8 @@ import (
 	"io"
 	"log"
 	"net/rpc"
-	"os"
 	"strings"
+	"time"
 
 	"github.com/ianremmler/bort"
 	"github.com/thoj/go-ircevent"
@@ -16,59 +16,58 @@ import (
 
 var (
 	// flags
-	nick    string
-	server  string
-	address string
-	channel string
-	prefix  string
+	flags   Config
 	cfgFile string
-
-	lg  = log.New(os.Stderr, "bort: ", log.Ldate|log.Ltime)
-	cfg Config
 
 	con    *irc.Connection
 	client *rpc.Client
 )
 
+var cfg = Config{
+	Nick:       "bort",
+	Server:     "irc.freenode.net:6667",
+	Address:    bort.DefaultAddress,
+	Prefix:     "bort:",
+	PollPeriod: 5,
+}
+
 type Config struct {
-	Nick    string `json:"nick"`
-	Server  string `json:"server"`
-	Address string `json:"address"`
-	Channel string `json:"channel"`
-	Prefix  string `json:"prefix"`
+	Nick       string `json:"nick"`
+	Server     string `json:"server"`
+	Channel    string `json:"channel"`
+	Address    string `json:"address"`
+	Prefix     string `json:"prefix"`
+	PollPeriod uint   `json:"poll_period"`
 }
 
 func main() {
 	flag.Parse()
-	if flag.NArg() < 1 {
-		flag.Usage()
-		os.Exit(0)
-	}
-	channel = flag.Arg(0)
-	if !strings.HasPrefix(channel, "#") {
-		lg.Fatalf("error: %s is not a valid channel\n", channel)
-	}
-
 	config()
-
-	con = irc.IRC(nick, nick)
-	con.Log = lg
-	err := con.Connect(server)
-	if err != nil {
-		lg.Fatalln(err)
+	if len(cfg.Channel) < 2 || !strings.HasPrefix(cfg.Channel, "#") {
+		log.Fatalf("'%s' is not a valid channel", cfg.Channel)
 	}
-
+	con = irc.IRC(cfg.Nick, cfg.Nick)
+	if err := con.Connect(cfg.Server); err != nil {
+		log.Fatalln(err)
+	}
 	con.AddCallback("001", func(e *irc.Event) {
-		con.Join(channel)
+		con.Join(cfg.Channel)
 	})
 	con.AddCallback("JOIN", func(e *irc.Event) {
-		if e.Nick == nick {
-			lg.Println("joined", e.Message())
+		if e.Nick == cfg.Nick {
+			con.ClearCallback("JOIN")
+			log.Printf("joined %s\n", e.Message())
+			connectPlug()
+			go func() {
+				poll := time.Tick(time.Duration(cfg.PollPeriod) * time.Second)
+				for {
+					<-poll
+					deliverPushes()
+				}
+			}()
 		}
 	})
 	con.AddCallback("PRIVMSG", handleEvent)
-
-	connectPlug()
 	con.Loop()
 }
 
@@ -80,14 +79,46 @@ func handleEvent(evt *irc.Event) {
 			return
 		}
 	}
-	if err := client.Call("Event.Process", msg, res); err != nil {
-		lg.Println(err)
+	if err := client.Call("Plugin.Process", msg, res); err != nil {
+		log.Println(err)
+		switch err {
+		case rpc.ErrShutdown, io.EOF, io.ErrUnexpectedEOF:
+			log.Println("disconnected from bortplug")
+			connectPlug()
+		}
+		return
+	}
+	if err := send(res); err != nil {
+		log.Println(err)
+	}
+}
+
+func deliverPushes() {
+	if client == nil {
+		if connectPlug() != nil {
+			return
+		}
+	}
+	res := []bort.Response{}
+	if err := client.Call("Plugin.Pull", struct{}{}, &res); err != nil {
+		log.Println(err)
 		switch err {
 		case rpc.ErrShutdown, io.EOF, io.ErrUnexpectedEOF:
 			connectPlug()
 		}
 		return
 	}
+	for i := range res {
+		if res[i].Target == "" {
+			res[i].Target = cfg.Channel
+		}
+		if err := send(&res[i]); err != nil {
+			log.Println(err)
+		}
+	}
+}
+
+func send(res *bort.Response) error {
 	switch res.Type {
 	case bort.None:
 	case bort.PrivMsg:
@@ -97,18 +128,19 @@ func handleEvent(evt *irc.Event) {
 	case bort.Action:
 		con.Action(res.Target, strings.SplitN(res.Text, "\n", 2)[0])
 	default:
-		lg.Println("error: unknown response type")
+		return fmt.Errorf("unknown response type: %d", res.Type)
 	}
+	return nil
 }
 
 func newMessage(evt *irc.Event) *bort.Message {
 	msg := &bort.Message{
-		Channel: channel,
+		Channel: cfg.Channel,
 		Host:    evt.Host,
 		Nick:    evt.Nick,
 		Raw:     evt.Raw,
 		Source:  evt.Source,
-		Target:  channel,
+		Target:  cfg.Channel,
 		Text:    evt.Message(),
 		User:    evt.User,
 	}
@@ -122,7 +154,7 @@ func newMessage(evt *irc.Event) *bort.Message {
 			msg.Text = strings.TrimSpace(cmdAndArgs[1])
 		}
 	}
-	if evt.Arguments[0] != channel {
+	if evt.Arguments[0] != cfg.Channel {
 		msg.Target = evt.Nick
 	}
 	return msg
@@ -135,49 +167,41 @@ func connectPlug() error {
 	}
 	client, err = rpc.Dial("tcp", cfg.Address)
 	if err == nil {
-		lg.Println("connected to bortplug")
-	} else {
-		lg.Println(err)
+		log.Println("connected to bortplug")
 	}
 	return err
 }
 
 func config() {
-	cfgData, err := bort.LoadConfig(cfgFile)
-	if err != nil {
-		lg.Printf("could not read config file: %s\n", cfgFile)
-	}
-	if err := json.Unmarshal(cfgData, &cfg); err != nil {
-		lg.Println(err)
+	if cfgData, err := bort.LoadConfig(cfgFile); err != nil {
+		log.Println(err)
+	} else if err := json.Unmarshal(cfgData, &cfg); err != nil {
+		log.Println(err)
 	}
 	flag.Visit(func(f *flag.Flag) {
 		switch f.Name {
 		case "n":
-			cfg.Nick = nick
+			cfg.Nick = flags.Nick
 		case "s":
-			cfg.Server = server
+			cfg.Server = flags.Server
+		case "c":
+			cfg.Channel = flags.Channel
 		case "a":
-			cfg.Address = address
+			cfg.Address = flags.Address
 		case "p":
-			cfg.Prefix = prefix
+			cfg.Prefix = flags.Prefix
+		case "t":
+			cfg.PollPeriod = flags.PollPeriod
 		}
 	})
 }
 
 func init() {
-	cfg = Config{
-		Nick:    "bort",
-		Server:  "irc.freenode.net:6667",
-		Address: ":1234",
-		Prefix:  "bort:",
-	}
-	flag.Usage = func() {
-		fmt.Println("usage: bort [<options>] #channel")
-		flag.PrintDefaults()
-	}
-	flag.StringVar(&nick, "n", cfg.Nick, "nick of the bot")
-	flag.StringVar(&server, "s", cfg.Server, "IRC server")
-	flag.StringVar(&address, "a", cfg.Address, "bortplug address")
-	flag.StringVar(&prefix, "p", cfg.Prefix, "command prefix")
-	flag.StringVar(&cfgFile, "c", "", "configuration file")
+	flag.StringVar(&flags.Nick, "n", cfg.Nick, "nick of the bot")
+	flag.StringVar(&flags.Server, "s", cfg.Server, "IRC server")
+	flag.StringVar(&flags.Channel, "c", cfg.Channel, "channel")
+	flag.StringVar(&flags.Address, "a", cfg.Address, "bortplug address")
+	flag.StringVar(&flags.Prefix, "p", cfg.Prefix, "command prefix")
+	flag.UintVar(&flags.PollPeriod, "t", cfg.PollPeriod, "poll period in seconds")
+	flag.StringVar(&cfgFile, "f", "", "configuration file")
 }
