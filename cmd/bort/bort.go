@@ -46,6 +46,10 @@ func main() {
 	if len(cfg.Channel) < 2 || !strings.HasPrefix(cfg.Channel, "#") {
 		log.Fatalf("'%s' is not a valid channel", cfg.Channel)
 	}
+	if cfg.PollPeriod < 1 {
+		cfg.PollPeriod = 1
+	}
+
 	con = irc.IRC(cfg.Nick, cfg.Nick)
 	if err := con.Connect(cfg.Server); err != nil {
 		log.Fatalln(err)
