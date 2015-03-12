@@ -106,9 +106,9 @@ func init() {
 	bort.RegisterCommand("calc", "RPN calculator", Calc)
 }
 
-func Calc(msg *bort.Message, res *bort.Response) error {
+func Calc(in, out *bort.Message) error {
 	cl.Reset()
-	cmdReader := strings.NewReader(msg.Text)
+	cmdReader := strings.NewReader(in.Text)
 	isHex := false
 	for {
 		tok := ""
@@ -120,8 +120,8 @@ func Calc(msg *bort.Message, res *bort.Response) error {
 		}
 		switch tok { // special cases
 		case "help":
-			res.Target = msg.Nick
-			res.Text = helpStr
+			out.Target = in.Nick
+			out.Text = helpStr
 			return nil
 		case "hex":
 			isHex = true
@@ -162,6 +162,6 @@ func Calc(msg *bort.Message, res *bort.Response) error {
 			ans += " "
 		}
 	}
-	res.Text = ans
+	out.Text = ans
 	return nil
 }

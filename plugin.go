@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	outbox     chan Response
+	outbox     chan Message
 	setupFuncs = []func(cfgData []byte){}
 	commands   = map[string]*command{}
 	matchers   = []*matcher{}
@@ -19,19 +19,19 @@ var (
 
 type Plugin struct{}
 
-func (p *Plugin) Process(msg *Message, res *Response) error { // rpc
-	res.Type = PrivMsg
-	res.Target = msg.Target
-	if msg.Command == "help" {
-		res.Target = msg.Nick
-		res.Text = help
+func (p *Plugin) Process(in, out *Message) error { // rpc
+	out.Type = PrivMsg
+	out.Target = in.Target
+	if in.Command == "help" {
+		out.Target = in.Nick
+		out.Text = help
 		return nil
 	}
-	if cmd, ok := commands[msg.Command]; ok {
-		return cmd.handle(msg, res)
+	if cmd, ok := commands[in.Command]; ok {
+		return cmd.handle(in, out)
 	}
 	for _, match := range matchers {
-		matches := match.re.FindStringSubmatch(msg.Text)
+		matches := match.re.FindStringSubmatch(in.Text)
 		idx := len(matches) - 1
 		if idx < 0 {
 			continue
@@ -39,26 +39,26 @@ func (p *Plugin) Process(msg *Message, res *Response) error { // rpc
 		if idx > 1 {
 			idx = 1
 		}
-		msg.Match = matches[idx]
-		return match.handle(msg, res)
+		in.Match = matches[idx]
+		return match.handle(in, out)
 	}
 	return nil
 }
 
-func (p *Plugin) Pull(dummy struct{}, res *[]Response) error { // rpc
+func (p *Plugin) Pull(dummy struct{}, msgs *[]Message) error { // rpc
 	for {
 		select {
-		case push := <-outbox:
-			*res = append(*res, push)
+		case msg := <-outbox:
+			*msgs = append(*msgs, msg)
 		default:
 			return nil
 		}
 	}
 }
 
-func Push(res *Response) error {
+func Push(msg *Message) error {
 	select {
-	case outbox <- *res:
+	case outbox <- *msg:
 		return nil
 	default:
 		return errors.New("outbox full")
@@ -97,7 +97,7 @@ func RegisterMatcher(match string, handle HandleFunc) error {
 }
 
 func PluginInit(outboxSize uint) {
-	outbox = make(chan Response, outboxSize)
+	outbox = make(chan Message, outboxSize)
 
 	for _, fn := range setupFuncs {
 		fn(configData)

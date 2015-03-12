@@ -52,14 +52,14 @@ func init() {
 	bort.RegisterCommand("flip", "flip text (or tables by default)", Flip)
 }
 
-func Flip(msg *bort.Message, res *bort.Response) error {
+func Flip(in, out *bort.Message) error {
 	flipped := ""
-	if len(msg.Text) > 0 {
-		flipped = flip(msg.Text)
+	if len(in.Text) > 0 {
+		flipped = flip(in.Text)
 	} else {
 		flipped = table
 	}
-	res.Text = flipper + flipped
+	out.Text = flipper + flipped
 	return nil
 }
 

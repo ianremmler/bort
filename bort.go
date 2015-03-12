@@ -17,15 +17,19 @@ var (
 	defaultCfgFile string
 )
 
-type ResponseType int
+type MessageType int
 
 const (
-	None ResponseType = iota
+	None MessageType = iota
 	PrivMsg
 	Action
 )
 
 type Message struct {
+	Type   MessageType
+	Target string
+	Text   string
+	// fields below are ignored for outgoing messages
 	Channel string
 	Command string
 	Host    string
@@ -33,18 +37,10 @@ type Message struct {
 	Nick    string
 	Raw     string
 	Source  string
-	Target  string
-	Text    string
 	User    string
 }
 
-type Response struct {
-	Type   ResponseType
-	Target string
-	Text   string
-}
-
-type HandleFunc func(msg *Message, res *Response) error
+type HandleFunc func(in, out *Message) error
 
 func LoadConfig(cfgFile string) ([]byte, error) {
 	if cfgFile == "" {

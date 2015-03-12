@@ -76,14 +76,14 @@ func main() {
 }
 
 func handleEvent(evt *irc.Event) {
-	msg := newMessage(evt)
-	res := &bort.Response{}
+	in := newMessage(evt)
+	out := &bort.Message{}
 	if client == nil {
 		if connectPlug() != nil {
 			return
 		}
 	}
-	if err := client.Call("Plugin.Process", msg, res); err != nil {
+	if err := client.Call("Plugin.Process", in, out); err != nil {
 		log.Println(err)
 		switch err {
 		case rpc.ErrShutdown, io.EOF, io.ErrUnexpectedEOF:
@@ -92,7 +92,7 @@ func handleEvent(evt *irc.Event) {
 		}
 		return
 	}
-	if err := send(res); err != nil {
+	if err := send(out); err != nil {
 		log.Println(err)
 	}
 }
@@ -103,8 +103,8 @@ func deliverPushes() {
 			return
 		}
 	}
-	res := []bort.Response{}
-	if err := client.Call("Plugin.Pull", struct{}{}, &res); err != nil {
+	msgs := []bort.Message{}
+	if err := client.Call("Plugin.Pull", struct{}{}, &msgs); err != nil {
 		log.Println(err)
 		switch err {
 		case rpc.ErrShutdown, io.EOF, io.ErrUnexpectedEOF:
@@ -112,27 +112,27 @@ func deliverPushes() {
 		}
 		return
 	}
-	for i := range res {
-		if res[i].Target == "" {
-			res[i].Target = cfg.Channel
+	for i := range msgs {
+		if msgs[i].Target == "" {
+			msgs[i].Target = cfg.Channel
 		}
-		if err := send(&res[i]); err != nil {
+		if err := send(&msgs[i]); err != nil {
 			log.Println(err)
 		}
 	}
 }
 
-func send(res *bort.Response) error {
-	switch res.Type {
+func send(msg *bort.Message) error {
+	switch msg.Type {
 	case bort.None:
 	case bort.PrivMsg:
-		for _, str := range strings.Split(strings.TrimRight(res.Text, "\n"), "\n") {
-			con.Privmsg(res.Target, str)
+		for _, str := range strings.Split(strings.TrimRight(msg.Text, "\n"), "\n") {
+			con.Privmsg(msg.Target, str)
 		}
 	case bort.Action:
-		con.Action(res.Target, strings.SplitN(res.Text, "\n", 2)[0])
+		con.Action(msg.Target, strings.SplitN(msg.Text, "\n", 2)[0])
 	default:
-		return fmt.Errorf("unknown response type: %d", res.Type)
+		return fmt.Errorf("unknown message type: %d", msg.Type)
 	}
 	return nil
 }

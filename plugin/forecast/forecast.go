@@ -34,17 +34,17 @@ type location struct {
 	Lon  string `json:"lon"`
 }
 
-func Forecast(msg *bort.Message, res *bort.Response) error {
-	loc := regexp.MustCompile("\\s+").ReplaceAllLiteralString(msg.Text, "+")
-	resp, err := http.Get(fmt.Sprintf(locURLFmt, loc))
+func Forecast(in, out *bort.Message) error {
+	loc := regexp.MustCompile("\\s+").ReplaceAllLiteralString(in.Text, "+")
+	outp, err := http.Get(fmt.Sprintf(locURLFmt, loc))
 	if err != nil {
 		return errLoc
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
+	defer outp.Body.Close()
+	if outp.StatusCode != 200 {
 		return errLoc
 	}
-	dec := json.NewDecoder(resp.Body)
+	dec := json.NewDecoder(outp.Body)
 	locs := []location{}
 	dec.Decode(&locs)
 	if len(locs) == 0 {
@@ -54,7 +54,7 @@ func Forecast(msg *bort.Message, res *bort.Response) error {
 	if err != nil {
 		return errFc
 	}
-	res.Text = fc
+	out.Text = fc
 	return nil
 }
 

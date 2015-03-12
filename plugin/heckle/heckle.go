@@ -15,8 +15,8 @@ var (
 type retortMap map[string]string
 
 func responder(retort string) bort.HandleFunc {
-	return func(msg *bort.Message, res *bort.Response) error {
-		res.Text = strings.Replace(retort, "%m", msg.Match, -1)
+	return func(in, out *bort.Message) error {
+		out.Text = strings.Replace(retort, "%m", in.Match, -1)
 		return nil
 	}
 }
