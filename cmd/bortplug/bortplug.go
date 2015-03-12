@@ -48,7 +48,7 @@ func main() {
 		if err != nil {
 			log.Println(err)
 			time.Sleep(1 * time.Second)
-			break
+			continue
 		}
 		log.Println("connected to bort")
 		rpc.ServeConn(con)
