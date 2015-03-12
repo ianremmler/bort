@@ -9,7 +9,7 @@ import (
 
 const (
 	cfgFilename    = "bort.conf"
-	DefaultAddress = ":1234"
+	DefaultAddress = ":8075" // robotspeak for BOTS
 )
 
 var (
