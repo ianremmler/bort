@@ -26,18 +26,21 @@ const (
 )
 
 type Message struct {
+	// incoming and outgoing
 	Type   MessageType
 	Target string
 	Text   string
 	// fields below are ignored for outgoing messages
-	Channel string
 	Command string
-	Host    string
 	Match   string
-	Nick    string
-	Raw     string
-	Source  string
-	User    string
+	Channel string
+	// from irc.Event
+	Code   string
+	Raw    string
+	Nick   string
+	Host   string
+	Source string
+	User   string
 }
 
 type HandleFunc func(in, out *Message) error

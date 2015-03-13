@@ -139,13 +139,13 @@ func send(msg *bort.Message) error {
 
 func newMessage(evt *irc.Event) *bort.Message {
 	msg := &bort.Message{
-		Channel: cfg.Channel,
-		Host:    evt.Host,
-		Nick:    evt.Nick,
-		Raw:     evt.Raw,
-		Source:  evt.Source,
 		Target:  cfg.Channel,
 		Text:    evt.Message(),
+		Channel: cfg.Channel,
+		Raw:     evt.Raw,
+		Nick:    evt.Nick,
+		Host:    evt.Host,
+		Source:  evt.Source,
 		User:    evt.User,
 	}
 	text := strings.TrimSpace(evt.Message())
