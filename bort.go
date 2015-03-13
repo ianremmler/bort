@@ -20,9 +20,12 @@ var (
 type MessageType int
 
 const (
-	None MessageType = iota
-	PrivMsg
+	None    MessageType = iota
+	PrivMsg MessageType = 1 << iota
 	Action
+	Join
+	Part
+	All MessageType = 1<<iota - 1
 )
 
 type Message struct {

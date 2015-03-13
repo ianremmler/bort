@@ -29,7 +29,7 @@ func setup(cfg []byte) {
 		return
 	}
 	for key, retort := range retorts {
-		if err := bort.RegisterMatcher(key, responder(retort)); err != nil {
+		if _, err := bort.RegisterMatcher(bort.PrivMsg, key, responder(retort)); err != nil {
 			log.Println(err)
 		}
 	}

@@ -107,6 +107,7 @@ func init() {
 }
 
 func Calc(in, out *bort.Message) error {
+	out.Type = bort.PrivMsg
 	cl.Reset()
 	cmdReader := strings.NewReader(in.Text)
 	isHex := false

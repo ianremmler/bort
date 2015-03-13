@@ -60,6 +60,7 @@ func main() {
 	con.AddCallback("JOIN", func(e *irc.Event) {
 		if e.Nick == cfg.Nick {
 			con.ClearCallback("JOIN")
+			con.AddCallback("JOIN", handleEvent)
 			log.Printf("joined %s\n", e.Message())
 			connectPlug()
 			go func() {
@@ -71,29 +72,34 @@ func main() {
 			}()
 		}
 	})
+	con.AddCallback("PART", handleEvent)
 	con.AddCallback("PRIVMSG", handleEvent)
+	con.AddCallback("CTCP_ACTION", handleEvent)
 	con.Loop()
 }
 
 func handleEvent(evt *irc.Event) {
-	in := newMessage(evt)
-	out := &bort.Message{}
+	in := evtToMsg(evt)
+	msgs := []bort.Message{}
 	if client == nil {
 		if connectPlug() != nil {
 			return
 		}
 	}
-	if err := client.Call("Plugin.Process", in, out); err != nil {
-		log.Println(err)
+	if err := client.Call("Plugin.Process", in, &msgs); err != nil {
 		switch err {
 		case rpc.ErrShutdown, io.EOF, io.ErrUnexpectedEOF:
 			log.Println("disconnected from bortplug")
 			connectPlug()
+		default:
+			log.Println(err)
 		}
 		return
 	}
-	if err := send(out); err != nil {
-		log.Println(err)
+	for i := range msgs {
+		if err := send(&msgs[i]); err != nil {
+			log.Println(err)
+		}
 	}
 }
 
@@ -105,10 +111,12 @@ func deliverPushes() {
 	}
 	msgs := []bort.Message{}
 	if err := client.Call("Plugin.Pull", struct{}{}, &msgs); err != nil {
-		log.Println(err)
 		switch err {
 		case rpc.ErrShutdown, io.EOF, io.ErrUnexpectedEOF:
+			log.Println("disconnected from bortplug")
 			connectPlug()
+		default:
+			log.Println(err)
 		}
 		return
 	}
@@ -126,37 +134,52 @@ func send(msg *bort.Message) error {
 	switch msg.Type {
 	case bort.None:
 	case bort.PrivMsg:
-		for _, str := range strings.Split(strings.TrimRight(msg.Text, "\n"), "\n") {
+		text := strings.TrimRight(msg.Text, "\n")
+		for _, str := range strings.Split(text, "\n") {
 			con.Privmsg(msg.Target, str)
 		}
 	case bort.Action:
-		con.Action(msg.Target, strings.SplitN(msg.Text, "\n", 2)[0])
+		text := msg.Text + "\n" // append newline to ensure SplitN returns 2 strings
+		con.Action(msg.Target, strings.SplitN(text, "\n", 2)[0])
 	default:
 		return fmt.Errorf("unknown message type: %d", msg.Type)
 	}
 	return nil
 }
 
-func newMessage(evt *irc.Event) *bort.Message {
+func evtToMsg(evt *irc.Event) *bort.Message {
 	msg := &bort.Message{
 		Target:  cfg.Channel,
 		Text:    evt.Message(),
 		Channel: cfg.Channel,
+		Code:    evt.Code,
 		Raw:     evt.Raw,
 		Nick:    evt.Nick,
 		Host:    evt.Host,
 		Source:  evt.Source,
 		User:    evt.User,
 	}
-	text := strings.TrimSpace(evt.Message())
-	if strings.HasPrefix(text, cfg.Prefix) {
-		cmdStr := strings.TrimLeft(text[len(cfg.Prefix):], " ")
-		cmdStr += " " // append space to ensure SplitN returns 2 strings
-		cmdAndArgs := strings.SplitN(cmdStr, " ", 2)
-		if len(cmdAndArgs) == 2 {
-			msg.Command = cmdAndArgs[0]
-			msg.Text = strings.TrimSpace(cmdAndArgs[1])
+	switch evt.Code {
+	case "PRIVMSG":
+		msg.Type = bort.PrivMsg
+		text := strings.TrimSpace(msg.Text)
+		if strings.HasPrefix(text, cfg.Prefix) {
+			cmdStr := strings.TrimLeft(text[len(cfg.Prefix):], " ")
+			cmdStr += " " // append space to ensure SplitN returns 2 strings
+			cmdAndArgs := strings.SplitN(cmdStr, " ", 2)
+			if len(cmdAndArgs) == 2 {
+				msg.Command = cmdAndArgs[0]
+				msg.Text = strings.TrimSpace(cmdAndArgs[1])
+			}
 		}
+	case "CTCP_ACTION":
+		msg.Type = bort.Action
+	case "JOIN":
+		msg.Type = bort.Join
+		msg.Text = evt.Nick
+	case "PART":
+		msg.Type = bort.Part
+		msg.Text = evt.Nick
 	}
 	if evt.Arguments[0] != cfg.Channel {
 		msg.Target = evt.Nick

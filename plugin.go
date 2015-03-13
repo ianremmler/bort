@@ -15,22 +15,31 @@ var (
 	commands   = map[string]*command{}
 	matchers   = []*matcher{}
 	help       string
+	matcherID  uint64
 )
 
 type Plugin struct{}
 
-func (p *Plugin) Process(in, out *Message) error { // rpc
-	out.Type = PrivMsg
-	out.Target = in.Target
+func (p *Plugin) Process(in *Message, msgs *[]Message) error { // rpc
 	if in.Command == "help" {
-		out.Target = in.Nick
-		out.Text = help
+		*msgs = append(*msgs, Message{Type: PrivMsg, Target: in.Nick, Text: help})
 		return nil
 	}
 	if cmd, ok := commands[in.Command]; ok {
-		return cmd.handle(in, out)
+		out := Message{Target: in.Target}
+		if err := cmd.handle(in, &out); err != nil {
+			return err
+		}
+		if out.Type != None {
+			*msgs = append(*msgs, out)
+		}
+		return nil
 	}
+	errs := ""
 	for _, match := range matchers {
+		if match.types&in.Type == 0 {
+			continue
+		}
 		matches := match.re.FindStringSubmatch(in.Text)
 		idx := len(matches) - 1
 		if idx < 0 {
@@ -40,7 +49,17 @@ func (p *Plugin) Process(in, out *Message) error { // rpc
 			idx = 1
 		}
 		in.Match = matches[idx]
-		return match.handle(in, out)
+		out := Message{Target: in.Target}
+		if err := match.handle(in, &out); err != nil {
+			errs += fmt.Sprintln(err)
+			continue
+		}
+		if out.Type != None {
+			*msgs = append(*msgs, out)
+		}
+	}
+	if errs != "" {
+		return errors.New(errs)
 	}
 	return nil
 }
@@ -71,6 +90,8 @@ type command struct {
 }
 
 type matcher struct {
+	id     uint64
+	types  MessageType
 	re     *regexp.Regexp
 	handle HandleFunc
 }
@@ -80,6 +101,9 @@ func RegisterSetup(fn func(cfgData []byte)) {
 }
 
 func RegisterCommand(cmd, help string, handle HandleFunc) error {
+	if cmd == "" {
+		return errors.New("cannot register empty command name")
+	}
 	if _, ok := commands[cmd]; ok {
 		return fmt.Errorf("%s: command already registered", cmd)
 	}
@@ -87,13 +111,33 @@ func RegisterCommand(cmd, help string, handle HandleFunc) error {
 	return nil
 }
 
-func RegisterMatcher(match string, handle HandleFunc) error {
+func UnregisterCommand(cmd string) bool {
+	_, ok := commands[cmd]
+	if ok {
+		delete(commands, cmd)
+	}
+	return ok
+}
+
+func RegisterMatcher(types MessageType, match string, handle HandleFunc) (uint64, error) {
 	re, err := regexp.Compile(match)
 	if err != nil {
-		return err
+		return 0, err
 	}
-	matchers = append(matchers, &matcher{re: re, handle: handle})
-	return nil
+	matcherID++
+	m := &matcher{id: matcherID, types: types, re: re, handle: handle}
+	matchers = append(matchers, m)
+	return matcherID, nil
+}
+
+func UnregisterMatcher(id uint64) bool {
+	for i := range matchers {
+		if matchers[i].id == id {
+			matchers = append(matchers[:i], matchers[i+1:]...)
+			return true
+		}
+	}
+	return false
 }
 
 func PluginInit(outboxSize uint) {
