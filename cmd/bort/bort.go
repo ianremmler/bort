@@ -23,20 +23,22 @@ var (
 	client *rpc.Client
 )
 
+// configuration, initialized to defaults
 var cfg = Config{
 	Nick:       "bort",
 	Server:     "irc.freenode.net:6667",
 	Address:    bort.DefaultAddress,
-	Prefix:     "bort:",
+	CmdPrefix:  "bort:",
 	PollPeriod: 5,
 }
 
+// Config holds the configurable values for the program.
 type Config struct {
 	Nick       string `json:"nick"`
 	Server     string `json:"server"`
 	Channel    string `json:"channel"`
 	Address    string `json:"address"`
-	Prefix     string `json:"prefix"`
+	CmdPrefix  string `json:"cmd_prefix"`
 	PollPeriod uint   `json:"poll_period"`
 }
 
@@ -54,30 +56,29 @@ func main() {
 	if err := con.Connect(cfg.Server); err != nil {
 		log.Fatalln(err)
 	}
-	con.AddCallback("001", func(e *irc.Event) {
-		con.Join(cfg.Channel)
-	})
-	con.AddCallback("JOIN", func(e *irc.Event) {
-		if e.Nick == cfg.Nick {
-			con.ClearCallback("JOIN")
-			con.AddCallback("JOIN", handleEvent)
-			log.Printf("joined %s\n", e.Message())
-			connectPlug()
-			go func() {
-				poll := time.Tick(time.Duration(cfg.PollPeriod) * time.Second)
-				for {
-					<-poll
-					deliverPushes()
-				}
-			}()
-		}
-	})
+	con.AddCallback("001", func(*irc.Event) { con.Join(cfg.Channel) })
+	con.AddCallback("JOIN", handleJoin)
 	con.AddCallback("PART", handleEvent)
 	con.AddCallback("PRIVMSG", handleEvent)
 	con.AddCallback("CTCP_ACTION", handleEvent)
 	con.Loop()
 }
 
+// handleJoin waits for bort to join, then connects to bortplug and hands join
+// events to handleEvent.
+func handleJoin(evt *irc.Event) {
+	if evt.Nick != cfg.Nick {
+		return
+	}
+	con.ClearCallback("JOIN")
+	con.AddCallback("JOIN", handleEvent)
+	log.Printf("joined %s\n", evt.Message())
+	connectPlug()
+	go pollPushes()
+}
+
+// handleEvent processes an incoming message, passes it to bort plug, and
+// distributes the results.
 func handleEvent(evt *irc.Event) {
 	in := evtToMsg(evt)
 	msgs := []bort.Message{}
@@ -103,6 +104,7 @@ func handleEvent(evt *irc.Event) {
 	}
 }
 
+// pollPlugins periodically fetches and handles messages pushed by plugins.
 func deliverPushes() {
 	if client == nil {
 		if connectPlug() != nil {
@@ -130,6 +132,16 @@ func deliverPushes() {
 	}
 }
 
+// pollPushes periodically delivers pending push messages.
+func pollPushes() {
+	t := time.Tick(time.Duration(cfg.PollPeriod) * time.Second)
+	for {
+		<-t
+		deliverPushes()
+	}
+}
+
+// send sends an IRC message according to its content.
 func send(msg *bort.Message) error {
 	switch msg.Type {
 	case bort.None:
@@ -147,6 +159,7 @@ func send(msg *bort.Message) error {
 	return nil
 }
 
+// evtToMsg converts a go-ircevent Event to a Message.
 func evtToMsg(evt *irc.Event) *bort.Message {
 	msg := &bort.Message{
 		Target:  cfg.Channel,
@@ -163,8 +176,8 @@ func evtToMsg(evt *irc.Event) *bort.Message {
 	case "PRIVMSG":
 		msg.Type = bort.PrivMsg
 		text := strings.TrimSpace(msg.Text)
-		if strings.HasPrefix(text, cfg.Prefix) {
-			cmdStr := strings.TrimLeft(text[len(cfg.Prefix):], " ")
+		if strings.HasPrefix(text, cfg.CmdPrefix) {
+			cmdStr := strings.TrimLeft(text[len(cfg.CmdPrefix):], " ")
 			cmdStr += " " // append space to ensure SplitN returns 2 strings
 			cmdAndArgs := strings.SplitN(cmdStr, " ", 2)
 			if len(cmdAndArgs) == 2 {
@@ -187,6 +200,7 @@ func evtToMsg(evt *irc.Event) *bort.Message {
 	return msg
 }
 
+// connectPlug connects to bortplug's RPC socket.
 func connectPlug() error {
 	var err error
 	if client != nil {
@@ -199,6 +213,7 @@ func connectPlug() error {
 	return err
 }
 
+// config overrides defaults with config file and flag values.
 func config() {
 	if cfgData, err := bort.LoadConfig(cfgFile); err != nil {
 		log.Println(err)
@@ -216,7 +231,7 @@ func config() {
 		case "a":
 			cfg.Address = flags.Address
 		case "p":
-			cfg.Prefix = flags.Prefix
+			cfg.CmdPrefix = flags.CmdPrefix
 		case "t":
 			cfg.PollPeriod = flags.PollPeriod
 		}
@@ -228,7 +243,7 @@ func init() {
 	flag.StringVar(&flags.Server, "s", cfg.Server, "IRC server")
 	flag.StringVar(&flags.Channel, "c", cfg.Channel, "channel")
 	flag.StringVar(&flags.Address, "a", cfg.Address, "bortplug address")
-	flag.StringVar(&flags.Prefix, "p", cfg.Prefix, "command prefix")
+	flag.StringVar(&flags.CmdPrefix, "p", cfg.CmdPrefix, "command prefix")
 	flag.UintVar(&flags.PollPeriod, "t", cfg.PollPeriod, "plugin push message poll period in seconds")
 	flag.StringVar(&cfgFile, "f", "", "configuration file")
 }

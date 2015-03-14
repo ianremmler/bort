@@ -18,8 +18,11 @@ var (
 	matcherID  uint64
 )
 
+// Plugin provides RPC calls for bort to pass messages to bortplug for
+// handling, and to retrieve pending push messages.
 type Plugin struct{}
 
+// Process inspects and processes an incoming message.
 func (p *Plugin) Process(in *Message, msgs *[]Message) error { // rpc
 	if in.Command == "help" {
 		*msgs = append(*msgs, Message{Type: PrivMsg, Target: in.Nick, Text: help})
@@ -64,6 +67,7 @@ func (p *Plugin) Process(in *Message, msgs *[]Message) error { // rpc
 	return nil
 }
 
+// Pull fetches queued messages pushed by plugins.
 func (p *Plugin) Pull(dummy struct{}, msgs *[]Message) error { // rpc
 	for {
 		select {
@@ -75,6 +79,7 @@ func (p *Plugin) Pull(dummy struct{}, msgs *[]Message) error { // rpc
 	}
 }
 
+// Push enqueues an outgoing message pushed by a plugin.
 func Push(msg *Message) error {
 	select {
 	case outbox <- *msg:
@@ -96,10 +101,15 @@ type matcher struct {
 	handle HandleFunc
 }
 
+// RegisterSetup registers a function to be run once bort has connected and
+// joind.  cfgData contains the configuration file JSON data.  Plugins should
+// typically call this from init() to ensure fn called.
 func RegisterSetup(fn func(cfgData []byte)) {
 	setupFuncs = append(setupFuncs, fn)
 }
 
+// RegisterCommand registers a command handler for the given name.  help is a
+// one line description of the plugin's purpose.
 func RegisterCommand(cmd, help string, handle HandleFunc) error {
 	if cmd == "" {
 		return errors.New("cannot register empty command name")
@@ -111,6 +121,8 @@ func RegisterCommand(cmd, help string, handle HandleFunc) error {
 	return nil
 }
 
+// UnregisterCommand unrigesters the command handler for the given name, if
+// found, and returns whether a handler was removed.
 func UnregisterCommand(cmd string) bool {
 	_, ok := commands[cmd]
 	if ok {
@@ -119,6 +131,10 @@ func UnregisterCommand(cmd string) bool {
 	return ok
 }
 
+// RegisterMatcher registers a match handler for the given regular expression.
+// types is a bitmask that specifies which message types to consider.  The text
+// matched (or that of the first capturing group, if any) will be placed in the
+// Match field of the message passed to handle.
 func RegisterMatcher(types MessageType, match string, handle HandleFunc) (uint64, error) {
 	re, err := regexp.Compile(match)
 	if err != nil {
@@ -130,6 +146,8 @@ func RegisterMatcher(types MessageType, match string, handle HandleFunc) (uint64
 	return matcherID, nil
 }
 
+// UnregisterMatcher unrigesters the match handler for the given ID, if found,
+// and returns whether a handler was removed.
 func UnregisterMatcher(id uint64) bool {
 	for i := range matchers {
 		if matchers[i].id == id {
@@ -140,6 +158,8 @@ func UnregisterMatcher(id uint64) bool {
 	return false
 }
 
+// PluginInit calls plugin setup functions, sets up the push queue, and
+// generates plugin help text.
 func PluginInit(outboxSize uint) {
 	outbox = make(chan Message, outboxSize)
 

@@ -1,3 +1,5 @@
+// Package calc is a bort IRC bot plugin that provides an interface to the clac
+// RPN calculator.
 package calc
 
 import (
@@ -103,9 +105,10 @@ func init() {
 	}
 	sort.Strings(cmdList)
 	helpStr = strings.Join(cmdList, " ")
-	bort.RegisterCommand("calc", "RPN calculator", Calc)
+	bort.RegisterCommand("calc", "RPN calculator", calc)
 }
 
+// Calc passes input to clac and returns the calculated result.
 func Calc(in, out *bort.Message) error {
 	out.Type = bort.PrivMsg
 	cl.Reset()

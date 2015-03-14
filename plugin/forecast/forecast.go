@@ -1,3 +1,5 @@
+// Package forecast is a bort IRC plugin that generates ascii forecasts using
+// National Weather Service data.
 package forecast
 
 import (
@@ -34,6 +36,8 @@ type location struct {
 	Lon  string `json:"lon"`
 }
 
+// Forecast returns a pretty-printed forecast for the given location.  The
+// location may be anything understood by OpenStreetMap's Nominatim service.
 func Forecast(in, out *bort.Message) error {
 	loc := regexp.MustCompile("\\s+").ReplaceAllLiteralString(in.Text, "+")
 	outp, err := http.Get(fmt.Sprintf(locURLFmt, loc))

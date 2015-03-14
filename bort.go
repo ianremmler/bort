@@ -1,3 +1,19 @@
+// Package bort provides the base for an IRC bot with plugin capability.
+//
+// The bot consists of the bort command, which handles the IRC connection, and
+// the bortplug command, which handles plugins.  The bortplug command can be
+// stopped, recompiled with different or reconfigured plugins, and restarted
+// while the bort command stays commected to the IRC server.
+//
+// Plugins may implement commands, respond to matched text, or push messages
+// asynchronously.  Plugins are compiled into the bortplug command.  To enable
+// a plugin, add 'import _ "plugin_import_path"' to cmd/bortplug/plugins.go.
+//
+// bort looks for a JSON configuration file in ~/.config/bort/bort.conf, which
+// can be overridden with a command line parameter.  bort prioritizes command
+// line parameter values, followed by configuration file, and finally, default
+// values.  Plugins have access to the configuration file data, and may look
+// for values of an appropriate key.
 package bort
 
 import (
@@ -8,8 +24,9 @@ import (
 )
 
 const (
+	// default address for bort/bortplug communication
+	DefaultAddress = ":8075"
 	cfgFilename    = "bort.conf"
-	DefaultAddress = ":8075" // robotspeak for BOTS
 )
 
 var (
@@ -17,8 +34,10 @@ var (
 	defaultCfgFile string
 )
 
+// MessageType is a bitmapped IRC message type.
 type MessageType int
 
+// message types
 const (
 	None    MessageType = iota
 	PrivMsg MessageType = 1 << iota
@@ -28,6 +47,8 @@ const (
 	All MessageType = 1<<iota - 1
 )
 
+// Message contains all data needed to deal with incoming and outgoing IRC
+// messages.
 type Message struct {
 	// incoming and outgoing
 	Type   MessageType
@@ -46,8 +67,11 @@ type Message struct {
 	User   string
 }
 
+// HandleFunc provides an interface for handling IRC messages.
 type HandleFunc func(in, out *Message) error
 
+// LoadConfig loads the given or default config file and returns the raw JSON
+// data.
 func LoadConfig(cfgFile string) ([]byte, error) {
 	if cfgFile == "" {
 		cfgFile = defaultCfgFile

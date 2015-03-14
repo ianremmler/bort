@@ -1,3 +1,5 @@
+// Package flip is a bort IRC bot plugin that flips tables and text, in true
+// emoji rage style.
 package flip
 
 import (
@@ -52,6 +54,8 @@ func init() {
 	bort.RegisterCommand("flip", "flip text (or tables by default)", Flip)
 }
 
+// Flip draws the "emoji table flip guy" flipping the given text, or a table if
+// no text is provided.
 func Flip(in, out *bort.Message) error {
 	flipped := ""
 	if len(in.Text) > 0 {
@@ -63,6 +67,8 @@ func Flip(in, out *bort.Message) error {
 	return nil
 }
 
+// flip generates a string that approximates the appearance of the text
+// rotated half way using carefully selected unicode characters.
 func flip(text string) string {
 	out := ""
 	for _, char := range strings.ToLower(text) {

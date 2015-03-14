@@ -1,3 +1,9 @@
+// Package heckle is a bort IRC bot plugin that responds to a set of watch
+// regular expressions with provided retorts.
+//
+// heckle looks for a pair at the top level of the bort configuration file
+// whose key is "heckle" and value is an object that consists of watch/retort
+// pairs.
 package heckle
 
 import (
@@ -28,8 +34,8 @@ func setup(cfg []byte) {
 		log.Println(err)
 		return
 	}
-	for key, retort := range retorts {
-		if _, err := bort.RegisterMatcher(bort.PrivMsg, key, responder(retort)); err != nil {
+	for watch, retort := range retorts {
+		if _, err := bort.RegisterMatcher(bort.PrivMsg, watch, responder(retort)); err != nil {
 			log.Println(err)
 		}
 	}

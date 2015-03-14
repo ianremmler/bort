@@ -19,11 +19,13 @@ var (
 	plug = &bort.Plugin{}
 )
 
+// configuration, initialized to defaults
 var cfg = Config{
 	Address:    bort.DefaultAddress,
 	OutboxSize: 10,
 }
 
+// Config holds the configurable values for the program.
 type Config struct {
 	Address    string `json:"address"`
 	OutboxSize uint   `json:"outbox_size"`
@@ -36,7 +38,6 @@ func main() {
 
 	flag.Parse()
 	config()
-
 	bort.PluginInit(cfg.OutboxSize)
 
 	listen, err := net.Listen("tcp", cfg.Address)
@@ -56,6 +57,7 @@ func main() {
 	}
 }
 
+// config overrides defaults with config file and flag values.
 func config() {
 	if cfgData, err := bort.LoadConfig(cfgFile); err != nil {
 		log.Println(err)
