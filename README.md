@@ -8,7 +8,7 @@ command stays commected to the IRC server.
 
 Plugins may implement commands, respond to matched text, or push messages
 asynchronously.  Plugins are compiled into the bortplug command.  To enable a
-plugin, add 'import _ "plugin_import_path"' to cmd/bortplug/plugins.go.
+plugin, add `import _ "plugin_import_path"` to cmd/bortplug/plugins.go.
 
 Bort looks for a JSON configuration file in ~/.config/bort/bort.conf, which can
 be overridden with a command line parameter.  Bort prioritizes command line
