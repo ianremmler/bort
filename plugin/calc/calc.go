@@ -105,7 +105,7 @@ func init() {
 	}
 	sort.Strings(cmdList)
 	helpStr = strings.Join(cmdList, " ")
-	bort.RegisterCommand("calc", "RPN calculator", calc)
+	bort.RegisterCommand("calc", "RPN calculator", Calc)
 }
 
 // Calc passes input to clac and returns the calculated result.
