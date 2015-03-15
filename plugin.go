@@ -14,8 +14,8 @@ var (
 	setupFuncs = []func(cfgData []byte){}
 	commands   = map[string]*command{}
 	matchers   = []*matcher{}
-	help       string
 	matcherID  uint64
+	help       string
 )
 
 // Plugin provides RPC calls for bort to pass messages to bortplug for
