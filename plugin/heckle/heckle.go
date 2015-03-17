@@ -22,6 +22,7 @@ type retortMap map[string]string
 
 func responder(retort string) bort.HandleFunc {
 	return func(in, out *bort.Message) error {
+		out.Type = bort.PrivMsg
 		out.Text = strings.Replace(retort, "%m", in.Match, -1)
 		return nil
 	}

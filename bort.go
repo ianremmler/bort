@@ -56,6 +56,7 @@ type Message struct {
 	Text   string
 	// fields below are ignored for outgoing messages
 	Command string
+	Args    string
 	Match   string
 	Channel string
 	// from irc.Event

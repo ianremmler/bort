@@ -39,7 +39,7 @@ type location struct {
 // Forecast returns a pretty-printed forecast for the given location.  The
 // location may be anything understood by OpenStreetMap's Nominatim service.
 func Forecast(in, out *bort.Message) error {
-	loc := regexp.MustCompile("\\s+").ReplaceAllLiteralString(in.Text, "+")
+	loc := regexp.MustCompile("\\s+").ReplaceAllLiteralString(in.Args, "+")
 	outp, err := http.Get(fmt.Sprintf(locURLFmt, loc))
 	if err != nil {
 		return errLoc
@@ -58,6 +58,7 @@ func Forecast(in, out *bort.Message) error {
 	if err != nil {
 		return errFc
 	}
+	out.Type = bort.PrivMsg
 	out.Text = fc
 	return nil
 }

@@ -182,7 +182,7 @@ func evtToMsg(evt *irc.Event) *bort.Message {
 			cmdAndArgs := strings.SplitN(cmdStr, " ", 2)
 			if len(cmdAndArgs) == 2 {
 				msg.Command = cmdAndArgs[0]
-				msg.Text = strings.TrimSpace(cmdAndArgs[1])
+				msg.Args = strings.TrimSpace(cmdAndArgs[1])
 			}
 		}
 	case "CTCP_ACTION":

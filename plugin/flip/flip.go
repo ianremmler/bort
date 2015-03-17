@@ -58,11 +58,12 @@ func init() {
 // no text is provided.
 func Flip(in, out *bort.Message) error {
 	flipped := ""
-	if len(in.Text) > 0 {
-		flipped = flip(in.Text)
+	if len(in.Args) > 0 {
+		flipped = flip(in.Args)
 	} else {
 		flipped = table
 	}
+	out.Type = bort.PrivMsg
 	out.Text = flipper + flipped
 	return nil
 }
