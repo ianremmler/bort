@@ -3,14 +3,16 @@
 package flip
 
 import (
+	"encoding/json"
+	"log"
 	"strings"
 
 	"github.com/ianremmler/bort"
 )
 
 const (
-	table   = "┻━┻"
-	flipper = "(ノಠ益ಠ)ノ彡 "
+	table          = "┻━┻"
+	defaultFlipper = "(ノಠ益ಠ)ノ彡 "
 )
 
 var flipTable = map[rune]rune{
@@ -47,10 +49,19 @@ var flipTable = map[rune]rune{
 	'"':  '„',
 }
 
+var cfg = &Config{
+	Flipper: defaultFlipper,
+}
+
+type Config struct {
+	Flipper string `json:"flipper"`
+}
+
 func init() {
 	for k, v := range flipTable {
 		flipTable[v] = k
 	}
+	bort.RegisterSetup(setup)
 	bort.RegisterCommand("flip", "flip text (or tables by default)", Flip)
 }
 
@@ -64,7 +75,7 @@ func Flip(in, out *bort.Message) error {
 		flipped = table
 	}
 	out.Type = bort.PrivMsg
-	out.Text = flipper + flipped
+	out.Text = cfg.Flipper + flipped
 	return nil
 }
 
@@ -80,4 +91,13 @@ func flip(text string) string {
 		out = string(outChar) + out
 	}
 	return out
+}
+
+func setup(cfgData []byte) {
+	if err := json.Unmarshal(cfgData, &struct {
+		*Config `json:"flip"`
+	}{cfg}); err != nil {
+		log.Println(err)
+		return
+	}
 }
