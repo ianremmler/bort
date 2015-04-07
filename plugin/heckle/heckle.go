@@ -28,8 +28,8 @@ func responder(retort string) bort.HandleFunc {
 	}
 }
 
-func setup(cfg []byte) {
-	if err := json.Unmarshal(cfg, &struct {
+func setup(cfgData []byte) {
+	if err := json.Unmarshal(cfgData, &struct {
 		retortMap `json:"heckle"`
 	}{retorts}); err != nil {
 		log.Println(err)
