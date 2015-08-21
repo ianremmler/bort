@@ -77,5 +77,5 @@ func config() {
 func init() {
 	flag.StringVar(&flags.Address, "a", cfg.Address, "bortplug address")
 	flag.UintVar(&flags.OutboxSize, "o", cfg.OutboxSize, "outbox size")
-	flag.StringVar(&cfgFile, "c", "", "configuration file")
+	flag.StringVar(&cfgFile, "f", "", "configuration file")
 }

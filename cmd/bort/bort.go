@@ -82,10 +82,8 @@ func handleJoin(evt *irc.Event) {
 func handleEvent(evt *irc.Event) {
 	in := evtToMsg(evt)
 	msgs := []bort.Message{}
-	if client == nil {
-		if connectPlug() != nil {
-			return
-		}
+	if client == nil && connectPlug() != nil {
+		return
 	}
 	if err := client.Call("Plugin.Process", in, &msgs); err != nil {
 		switch err {
