@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"sort"
 	"strings"
 
@@ -24,17 +23,17 @@ var (
 		"-":      cl.Sub,
 		"*":      cl.Mul,
 		"/":      cl.Div,
+		"div":    cl.IntDiv,
 		"mod":    cl.Mod,
 		"exp":    cl.Exp,
 		"^":      cl.Pow,
 		"2^":     cl.Pow2,
 		"10^":    cl.Pow10,
+		"logn":   cl.LogN,
 		"ln":     cl.Ln,
 		"log":    cl.Log,
 		"lg":     cl.Lg,
 		"sqrt":   cl.Sqrt,
-		"hypot":  cl.Hypot,
-		"gamma":  cl.Gamma,
 		"!":      cl.Factorial,
 		"comb":   cl.Comb,
 		"perm":   cl.Perm,
@@ -44,18 +43,12 @@ var (
 		"asin":   cl.Asin,
 		"acos":   cl.Acos,
 		"atan":   cl.Atan,
-		"sinh":   cl.Sinh,
-		"cosh":   cl.Cosh,
-		"tanh":   cl.Tanh,
-		"asinh":  cl.Asinh,
-		"acosh":  cl.Acosh,
-		"atanh":  cl.Atanh,
 		"atan2":  cl.Atan2,
 		"dtor":   cl.DegToRad,
 		"rtod":   cl.RadToDeg,
-		"floor":  cl.Floor,
 		"rtop":   cl.RectToPolar,
 		"ptor":   cl.PolarToRect,
+		"floor":  cl.Floor,
 		"ceil":   cl.Ceil,
 		"trunc":  cl.Trunc,
 		"and":    cl.And,
@@ -67,10 +60,6 @@ var (
 		"xorn":   cl.XorN,
 		"sum":    cl.Sum,
 		"avg":    cl.Avg,
-		"dot":    cl.Dot,
-		"dot3":   cl.Dot3,
-		"cross":  cl.Cross,
-		"mag":    cl.Mag,
 		"clear":  cl.Clear,
 		"drop":   cl.Drop,
 		"dropn":  cl.DropN,
@@ -91,9 +80,14 @@ var (
 		"rotr":   cl.RotR,
 		"unrot":  cl.Unrot,
 		"unrotr": cl.UnrotR,
-		"pi":     func() error { return cl.Push(math.Pi) },
-		"e":      func() error { return cl.Push(math.E) },
-		"phi":    func() error { return cl.Push(math.Phi) },
+		"mag":    cl.Mag,
+		"hyp":    cl.Hypot,
+		"dot":    cl.Dot,
+		"dot3":   cl.Dot3,
+		"cross":  cl.Cross,
+		"pi":     func() error { return cl.Push(clac.Pi) },
+		"e":      func() error { return cl.Push(clac.E) },
+		"phi":    func() error { return cl.Push(clac.Phi) },
 	}
 	helpStr string
 )
@@ -150,17 +144,24 @@ func Calc(in, out *bort.Message) error {
 	if len(stack) == 0 {
 		return errors.New("empty stack")
 	}
+
+	if isHex {
+		clac.SetFormat("%#x")
+	} else {
+		clac.SetFormat("%12g")
+	}
 	ans := ""
 	for i := range stack {
 		val := stack[len(stack)-i-1]
 		if isHex {
-			if math.Abs(val) >= 1<<53 {
-				ans += "overflow"
+			var err error
+			if val, err = clac.Trunc(val); err != nil {
+				ans += fmt.Sprint("error")
 			} else {
-				ans += fmt.Sprintf("%#x", int64(val))
+				ans += fmt.Sprint(val)
 			}
 		} else {
-			ans += fmt.Sprintf("%g", val)
+			ans += fmt.Sprint(val)
 		}
 		if i < len(stack)-1 {
 			ans += " "
