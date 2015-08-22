@@ -5,15 +5,10 @@ package urltitle
 import (
 	"log"
 	"net/http"
-	"regexp"
 
 	"github.com/ianremmler/bort"
 	"github.com/mvdan/xurls"
 	"golang.org/x/net/html"
-)
-
-var (
-	urlRE *regexp.Regexp
 )
 
 func findNode(path []string, node *html.Node) *html.Node {
@@ -31,11 +26,7 @@ func findNode(path []string, node *html.Node) *html.Node {
 }
 
 func extractTitle(in, out *bort.Message) error {
-	url := urlRE.FindString(in.Text)
-	if url == "" {
-		return nil
-	}
-	resp, err := http.Get(url)
+	resp, err := http.Get(in.Match)
 	if err != nil {
 		return nil
 	}
@@ -56,12 +47,13 @@ func extractTitle(in, out *bort.Message) error {
 }
 
 func init() {
-	var err error
-	if urlRE, err = xurls.StrictMatchingScheme("http"); err != nil {
+	urlRE, err := xurls.StrictMatchingScheme("http")
+	if err != nil {
 		log.Println("urltitle: error setting regexp")
 		return
 	}
-	if _, err = bort.RegisterMatcher(bort.PrivMsg, urlRE.String(), extractTitle); err != nil {
+	pat := "(" + urlRE.String() + ")"
+	if _, err = bort.RegisterMatcher(bort.PrivMsg, pat, extractTitle); err != nil {
 		log.Println("urltitle: error registering plugin")
 	}
 }
