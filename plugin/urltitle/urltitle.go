@@ -11,7 +11,7 @@ import (
 	"golang.org/x/net/html"
 )
 
-func findNode(path []string, node *html.Node) *html.Node {
+func findNode(node *html.Node, path ...string) *html.Node {
 	for i := range path {
 		if node == nil {
 			return nil
@@ -38,7 +38,7 @@ func extractTitle(in, out *bort.Message) error {
 	if err != nil {
 		return nil
 	}
-	title := findNode([]string{"html", "head", "title"}, page)
+	title := findNode(page, "html", "head", "title")
 	if title != nil && title.FirstChild != nil {
 		out.Type = bort.PrivMsg
 		out.Text = title.FirstChild.Data
