@@ -5,6 +5,7 @@ package urltitle
 import (
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/ianremmler/bort"
 	"github.com/mvdan/xurls"
@@ -41,7 +42,9 @@ func extractTitle(in, out *bort.Message) error {
 	title := findNode(page, "html", "head", "title")
 	if title != nil && title.FirstChild != nil {
 		out.Type = bort.PrivMsg
-		out.Text = title.FirstChild.Data
+		text := strings.TrimSpace(title.FirstChild.Data)
+		text = strings.SplitN(text+"\n", "\n", 2)[0] // first line
+		out.Text = text
 	}
 	return nil
 }
