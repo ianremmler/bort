@@ -147,23 +147,22 @@ func Calc(in, out *bort.Message) error {
 	} else {
 		clac.SetFormat("%12g")
 	}
-	ans := ""
+	text := ""
 	for i := range stack {
 		val := stack[len(stack)-i-1]
+		var err error
 		if isHex {
-			var err error
-			if val, err = clac.Trunc(val); err != nil {
-				ans += fmt.Sprint("error")
-			} else {
-				ans += fmt.Sprint(val)
-			}
+			val, err = clac.Trunc(val)
+		}
+		if err != nil {
+			text += "error"
 		} else {
-			ans += fmt.Sprint(val)
+			text += fmt.Sprint(val)
 		}
 		if i < len(stack)-1 {
-			ans += " "
+			text += " "
 		}
 	}
-	out.Text = ans
+	out.Text = text
 	return nil
 }
