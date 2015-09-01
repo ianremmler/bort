@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"log"
 	"regexp"
 	"sort"
 	"text/tabwriter"
@@ -11,12 +12,16 @@ import (
 
 var (
 	outbox     chan Message
-	setupFuncs = []func(cfgData []byte){}
+	setupFuncs = []SetupFunc{}
 	commands   = map[string]*command{}
 	matchers   = []*matcher{}
 	matcherID  uint64
 	help       string
 )
+
+// SetupFunc provides a means for plugins to inspect global configuration data
+// and initialize themselves
+type SetupFunc func(cfgData []byte) error
 
 // Plugin provides RPC calls for bort to pass messages to bortplug for
 // handling, and to retrieve pending push messages.
@@ -104,7 +109,7 @@ type matcher struct {
 // RegisterSetup registers a function to be run once bort has connected and
 // joind.  cfgData contains the configuration file JSON data.  Plugins should
 // typically call this from init() to ensure fn called.
-func RegisterSetup(fn func(cfgData []byte)) {
+func RegisterSetup(fn SetupFunc) {
 	setupFuncs = append(setupFuncs, fn)
 }
 
@@ -164,7 +169,9 @@ func PluginInit(outboxSize uint) {
 	outbox = make(chan Message, outboxSize)
 
 	for _, fn := range setupFuncs {
-		fn(configData)
+		if err := fn(configData); err != nil {
+			log.Println(err)
+		}
 	}
 	setupFuncs = nil
 

@@ -28,18 +28,18 @@ func responder(retort string) bort.HandleFunc {
 	}
 }
 
-func setup(cfgData []byte) {
+func setup(cfgData []byte) error {
 	if err := json.Unmarshal(cfgData, &struct {
 		retortMap `json:"heckle"`
 	}{retorts}); err != nil {
-		log.Println(err)
-		return
+		return err
 	}
 	for watch, retort := range retorts {
 		if _, err := bort.RegisterMatcher(bort.PrivMsg, watch, responder(retort)); err != nil {
 			log.Println(err)
 		}
 	}
+	return nil
 }
 
 func init() {

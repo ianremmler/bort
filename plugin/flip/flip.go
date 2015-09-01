@@ -4,7 +4,6 @@ package flip
 
 import (
 	"encoding/json"
-	"log"
 	"strings"
 
 	"github.com/ianremmler/bort"
@@ -93,11 +92,8 @@ func flip(text string) string {
 	return out
 }
 
-func setup(cfgData []byte) {
-	if err := json.Unmarshal(cfgData, &struct {
+func setup(cfgData []byte) error {
+	return json.Unmarshal(cfgData, &struct {
 		*Config `json:"flip"`
-	}{cfg}); err != nil {
-		log.Println(err)
-		return
-	}
+	}{cfg})
 }
