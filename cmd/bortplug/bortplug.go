@@ -27,8 +27,8 @@ var cfg = Config{
 
 // Config holds the configurable values for the program.
 type Config struct {
-	Address    string `json:"address"`
-	OutboxSize uint   `json:"outbox_size"`
+	Address    string
+	OutboxSize uint
 }
 
 func main() {

@@ -34,12 +34,12 @@ var cfg = Config{
 
 // Config holds the configurable values for the program.
 type Config struct {
-	Nick       string `json:"nick"`
-	Server     string `json:"server"`
-	Channel    string `json:"channel"`
-	Address    string `json:"address"`
-	CmdPrefix  string `json:"cmd_prefix"`
-	PollPeriod uint   `json:"poll_period"`
+	Nick       string
+	Server     string
+	Channel    string
+	Address    string
+	CmdPrefix  string
+	PollPeriod uint
 }
 
 func main() {

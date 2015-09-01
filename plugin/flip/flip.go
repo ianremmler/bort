@@ -54,7 +54,7 @@ var cfg = &Config{
 }
 
 type Config struct {
-	Flipper string `json:"flipper"`
+	Flipper string
 }
 
 func init() {

@@ -32,8 +32,8 @@ var (
 
 type location struct {
 	Name string `json:"display_name"`
-	Lat  string `json:"lat"`
-	Lon  string `json:"lon"`
+	Lat  string
+	Lon  string
 }
 
 // Forecast returns a pretty-printed forecast for the given location.  The
