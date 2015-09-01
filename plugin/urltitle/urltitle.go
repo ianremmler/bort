@@ -13,10 +13,7 @@ import (
 	"golang.org/x/net/html"
 )
 
-var cfg = &Config{
-	Prefix: "",
-	Suffix: "",
-}
+var cfg = &Config{}
 
 type Config struct {
 	Prefix string
