@@ -51,9 +51,9 @@ const (
 // messages.
 type Message struct {
 	// incoming and outgoing
-	Type   MessageType
-	Target string
-	Text   string
+	Type    MessageType
+	Context string
+	Text    string
 	// fields below are ignored for outgoing messages
 	Command string
 	Args    string

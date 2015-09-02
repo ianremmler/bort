@@ -115,7 +115,7 @@ func Calc(in, out *bort.Message) error {
 		}
 		switch tok { // special cases
 		case "help":
-			out.Target = in.Nick
+			out.Context = in.Nick
 			out.Text = helpStr
 			return nil
 		case "hex":

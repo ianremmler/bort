@@ -30,11 +30,11 @@ type Plugin struct{}
 // Process inspects and processes an incoming message.
 func (p *Plugin) Process(in *Message, msgs *[]Message) error { // rpc
 	if in.Command == "help" {
-		*msgs = append(*msgs, Message{Type: PrivMsg, Target: in.Nick, Text: help})
+		*msgs = append(*msgs, Message{Type: PrivMsg, Context: in.Nick, Text: help})
 		return nil
 	}
 	if cmd, ok := commands[in.Command]; ok {
-		out := Message{Target: in.Target}
+		out := Message{Context: in.Context}
 		if err := cmd.handle(in, &out); err != nil {
 			return err
 		}
@@ -57,7 +57,7 @@ func (p *Plugin) Process(in *Message, msgs *[]Message) error { // rpc
 			idx = 1
 		}
 		in.Match = matches[idx]
-		out := Message{Target: in.Target}
+		out := Message{Context: in.Context}
 		if err := match.handle(in, &out); err != nil {
 			errs += fmt.Sprintln(err)
 			continue
