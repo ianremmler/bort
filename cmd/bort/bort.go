@@ -121,8 +121,8 @@ func deliverPushes() {
 		return
 	}
 	for i := range msgs {
-		if msgs[i].Target == "" {
-			msgs[i].Target = cfg.Channel
+		if msgs[i].Context == "" {
+			msgs[i].Context = cfg.Channel
 		}
 		if err := send(&msgs[i]); err != nil {
 			log.Println(err)
@@ -146,11 +146,11 @@ func send(msg *bort.Message) error {
 	case bort.PrivMsg:
 		text := strings.TrimRight(msg.Text, "\n")
 		for _, str := range strings.Split(text, "\n") {
-			con.Privmsg(msg.Target, str)
+			con.Privmsg(msg.Context, str)
 		}
 	case bort.Action:
 		text := msg.Text + "\n" // append newline to ensure SplitN returns 2 strings
-		con.Action(msg.Target, strings.SplitN(text, "\n", 2)[0])
+		con.Action(msg.Context, strings.SplitN(text, "\n", 2)[0])
 	default:
 		return fmt.Errorf("unknown message type: %d", msg.Type)
 	}
@@ -160,7 +160,7 @@ func send(msg *bort.Message) error {
 // evtToMsg converts a go-ircevent Event to a Message.
 func evtToMsg(evt *irc.Event) *bort.Message {
 	msg := &bort.Message{
-		Target:  cfg.Channel,
+		Context: cfg.Channel,
 		Text:    evt.Message(),
 		Channel: cfg.Channel,
 		Code:    evt.Code,
@@ -170,14 +170,21 @@ func evtToMsg(evt *irc.Event) *bort.Message {
 		Source:  evt.Source,
 		User:    evt.User,
 	}
+	if evt.Arguments[0] != cfg.Channel {
+		msg.Context = evt.Nick
+	}
 	switch evt.Code {
 	case "PRIVMSG":
 		msg.Type = bort.PrivMsg
+		isCmd := (msg.Context == evt.Nick)
 		text := strings.TrimSpace(msg.Text)
 		if strings.HasPrefix(text, cfg.CmdPrefix) {
-			cmdStr := strings.TrimLeft(text[len(cfg.CmdPrefix):], " ")
-			cmdStr += " " // append space to ensure SplitN returns 2 strings
-			cmdAndArgs := strings.SplitN(cmdStr, " ", 2)
+			text = strings.TrimLeft(text[len(cfg.CmdPrefix):], " ")
+			isCmd = true
+		}
+		if isCmd {
+			text += " " // append space to ensure SplitN returns 2 strings
+			cmdAndArgs := strings.SplitN(text, " ", 2)
 			if len(cmdAndArgs) == 2 {
 				msg.Command = cmdAndArgs[0]
 				msg.Args = strings.TrimSpace(cmdAndArgs[1])
@@ -191,9 +198,6 @@ func evtToMsg(evt *irc.Event) *bort.Message {
 	case "PART":
 		msg.Type = bort.Part
 		msg.Text = evt.Nick
-	}
-	if evt.Arguments[0] != cfg.Channel {
-		msg.Target = evt.Nick
 	}
 	return msg
 }
