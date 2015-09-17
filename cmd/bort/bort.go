@@ -8,10 +8,13 @@ import (
 	"log"
 	"net/rpc"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ianremmler/bort"
-	"github.com/thoj/go-ircevent"
+	"github.com/sorcix/bot"
+	"github.com/sorcix/irc"
+	"github.com/sorcix/irc/ctcp"
 )
 
 var (
@@ -19,8 +22,10 @@ var (
 	flags   Config
 	cfgFile string
 
-	con    *irc.Connection
-	client *rpc.Client
+	mut    sync.Mutex
+	isLive bool
+	botc   *bot.Client
+	rpcc   *rpc.Client
 )
 
 // configuration, initialized to defaults
@@ -51,41 +56,65 @@ func main() {
 	if cfg.PollPeriod < 1 {
 		cfg.PollPeriod = 1
 	}
-
-	con = irc.IRC(cfg.Nick, cfg.Nick)
-	if err := con.Connect(cfg.Server); err != nil {
-		log.Fatalln(err)
-	}
-	con.AddCallback("001", func(*irc.Event) { con.Join(cfg.Channel) })
-	con.AddCallback("JOIN", handleJoin)
-	con.AddCallback("PART", handleEvent)
-	con.AddCallback("PRIVMSG", handleEvent)
-	con.AddCallback("CTCP_ACTION", handleEvent)
-	con.Loop()
-}
-
-// handleJoin waits for bort to join, then connects to bortplug and hands join
-// events to handleEvent.
-func handleJoin(evt *irc.Event) {
-	if evt.Nick != cfg.Nick {
-		return
-	}
-	con.ClearCallback("JOIN")
-	con.AddCallback("JOIN", handleEvent)
-	log.Printf("joined %s\n", evt.Message())
-	connectPlug()
 	go pollPushes()
+	for {
+		con, err := irc.Dial(cfg.Server)
+		if err != nil {
+			log.Println(err)
+			time.Sleep(time.Second)
+			continue
+		}
+
+		botc = bot.NewClient(con, handleMessage)
+		if botc == nil {
+			continue
+		}
+		botc.Identify(cfg.Nick, cfg.Nick, cfg.Nick)
+		botc.Wait()
+
+		mut.Lock()
+		isLive = false
+		mut.Unlock()
+	}
 }
 
-// handleEvent processes an incoming message, passes it to bort plug, and
-// distributes the results.
-func handleEvent(evt *irc.Event) {
-	in := evtToMsg(evt)
-	msgs := []bort.Message{}
-	if client == nil && connectPlug() != nil {
+// setup looks for a welcome response, joins the channel, and connects to bortplug
+func setup(msg *irc.Message, snd irc.Sender) {
+	switch msg.Command {
+	case irc.RPL_WELCOME:
+		log.Printf("connected to %s (%s)\n", cfg.Server, msg.Prefix.Name)
+		out := &irc.Message{Command: irc.JOIN, Params: []string{cfg.Channel}}
+		if err := snd.Send(out); err != nil {
+			log.Println(err)
+		}
+	case irc.JOIN:
+		if msg.Name != cfg.Nick {
+			break
+		}
+		if len(msg.Params) > 0 {
+			log.Printf("joined %s\n", msg.Params[0])
+		}
+		connectPlug()
+		isLive = true
+	}
+}
+
+// handleMessage processes incoming IRC messages
+func handleMessage(msg *irc.Message, snd irc.Sender) {
+	mut.Lock()
+	defer mut.Unlock()
+
+	if !isLive {
+		setup(msg, snd)
 		return
 	}
-	if err := client.Call("Plugin.Process", in, &msgs); err != nil {
+
+	in := convertMsg(msg)
+	msgs := []bort.Message{}
+	if rpcc == nil && connectPlug() != nil {
+		return
+	}
+	if err := rpcc.Call("Plugin.Process", in, &msgs); err != nil {
 		switch err {
 		case rpc.ErrShutdown, io.EOF, io.ErrUnexpectedEOF:
 			log.Println("disconnected from bortplug")
@@ -96,21 +125,28 @@ func handleEvent(evt *irc.Event) {
 		return
 	}
 	for i := range msgs {
-		if err := send(&msgs[i]); err != nil {
+		if err := send(snd, &msgs[i]); err != nil {
 			log.Println(err)
 		}
 	}
 }
 
-// pollPlugins periodically fetches and handles messages pushed by plugins.
+// deliverPushes periodically fetches and handles messages pushed by plugins.
 func deliverPushes() {
-	if client == nil {
+	mut.Lock()
+	defer mut.Unlock()
+
+	if !isLive {
+		return
+	}
+	if rpcc == nil {
 		if connectPlug() != nil {
 			return
 		}
 	}
+
 	msgs := []bort.Message{}
-	if err := client.Call("Plugin.Pull", struct{}{}, &msgs); err != nil {
+	if err := rpcc.Call("Plugin.Pull", struct{}{}, &msgs); err != nil {
 		switch err {
 		case rpc.ErrShutdown, io.EOF, io.ErrUnexpectedEOF:
 			log.Println("disconnected from bortplug")
@@ -124,7 +160,7 @@ func deliverPushes() {
 		if msgs[i].Context == "" {
 			msgs[i].Context = cfg.Channel
 		}
-		if err := send(&msgs[i]); err != nil {
+		if err := send(botc, &msgs[i]); err != nil {
 			log.Println(err)
 		}
 	}
@@ -140,75 +176,82 @@ func pollPushes() {
 }
 
 // send sends an IRC message according to its content.
-func send(msg *bort.Message) error {
-	switch msg.Type {
+func send(snd irc.Sender, in *bort.Message) error {
+	base := irc.Message{Command: irc.PRIVMSG, Params: []string{in.Context}}
+	switch in.Type {
 	case bort.None:
 	case bort.PrivMsg:
-		text := strings.TrimRight(msg.Text, "\n")
+		text := strings.TrimRight(in.Text, "\n")
 		for _, str := range strings.Split(text, "\n") {
-			con.Privmsg(msg.Context, str)
+			out := base
+			out.Trailing = str
+			snd.Send(&out)
 		}
 	case bort.Action:
-		text := msg.Text + "\n" // append newline to ensure SplitN returns 2 strings
-		con.Action(msg.Context, strings.SplitN(text, "\n", 2)[0])
+		text := strings.SplitN(in.Text+"\n", "\n", 2)[0]
+		out := base
+		out.Trailing = ctcp.Action(text)
+		snd.Send(&out)
 	default:
-		return fmt.Errorf("unknown message type: %d", msg.Type)
+		return fmt.Errorf("unknown message type: %d", in.Type)
 	}
 	return nil
 }
 
-// evtToMsg converts a go-ircevent Event to a Message.
-func evtToMsg(evt *irc.Event) *bort.Message {
-	msg := &bort.Message{
+// convertMsg converts an irc.Message to a bort.Message
+func convertMsg(imsg *irc.Message) *bort.Message {
+	bmsg := &bort.Message{
 		Context: cfg.Channel,
-		Text:    evt.Message(),
-		Channel: cfg.Channel,
-		Code:    evt.Code,
-		Raw:     evt.Raw,
-		Nick:    evt.Nick,
-		Host:    evt.Host,
-		Source:  evt.Source,
-		User:    evt.User,
+		IRCCmd:  imsg.Command,
+		Nick:    imsg.Name,
+		User:    imsg.User,
+		Host:    imsg.Host,
+		Params:  append([]string(nil), imsg.Params...),
+		Text:    imsg.Trailing,
 	}
-	if evt.Arguments[0] != cfg.Channel {
-		msg.Context = evt.Nick
+	if len(imsg.Params) > 0 && imsg.Params[0] != cfg.Channel {
+		bmsg.Context = imsg.Name
 	}
-	switch evt.Code {
-	case "PRIVMSG":
-		msg.Type = bort.PrivMsg
-		isCmd := (msg.Context == evt.Nick)
-		text := strings.TrimSpace(msg.Text)
+	switch imsg.Command {
+	case irc.PRIVMSG:
+		// handle actions
+		if tag, text, ok := ctcp.Decode(imsg.Trailing); ok && tag == ctcp.ACTION {
+			bmsg.Type = bort.Action
+			bmsg.Text = text
+			break
+		}
+
+		bmsg.Type = bort.PrivMsg
+		isCmd := (bmsg.Context != cfg.Channel)
+		text := strings.TrimSpace(bmsg.Text)
 		if strings.HasPrefix(text, cfg.CmdPrefix) {
 			text = strings.TrimLeft(text[len(cfg.CmdPrefix):], " ")
 			isCmd = true
 		}
 		if isCmd {
-			text += " " // append space to ensure SplitN returns 2 strings
-			cmdAndArgs := strings.SplitN(text, " ", 2)
+			cmdAndArgs := strings.SplitN(text+" ", " ", 2)
 			if len(cmdAndArgs) == 2 {
-				msg.Command = cmdAndArgs[0]
-				msg.Args = strings.TrimSpace(cmdAndArgs[1])
+				bmsg.Command = cmdAndArgs[0]
+				bmsg.Args = strings.TrimSpace(cmdAndArgs[1])
 			}
 		}
-	case "CTCP_ACTION":
-		msg.Type = bort.Action
-	case "JOIN":
-		msg.Type = bort.Join
-		msg.Text = evt.Nick
-	case "PART":
-		msg.Type = bort.Part
-		msg.Text = evt.Nick
+	case irc.JOIN:
+		bmsg.Type = bort.Join
+		bmsg.Text = imsg.Name
+	case irc.PART:
+		bmsg.Type = bort.Part
+		bmsg.Text = imsg.Name
 	}
-	return msg
+	return bmsg
 }
 
 // connectPlug connects to bortplug's RPC socket.
 func connectPlug() error {
 	var err error
-	if client != nil {
-		client.Close()
+	if rpcc != nil {
+		rpcc.Close()
 	}
-	client, err = rpc.Dial("tcp", cfg.Address)
+	rpcc, err = rpc.Dial("tcp", cfg.Address)
 	if err == nil {
 		log.Println("connected to bortplug")
 	}

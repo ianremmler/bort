@@ -54,18 +54,15 @@ type Message struct {
 	Type    MessageType
 	Context string
 	Text    string
-	// fields below are ignored for outgoing messages
+	// ignored for outgoing
+	Nick    string
+	User    string
+	Host    string
+	IRCCmd  string
+	Params  []string
 	Command string
 	Args    string
 	Match   string
-	Channel string
-	// from irc.Event
-	Code   string
-	Raw    string
-	Nick   string
-	Host   string
-	Source string
-	User   string
 }
 
 // HandleFunc provides an interface for handling IRC messages.
