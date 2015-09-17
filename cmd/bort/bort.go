@@ -82,7 +82,7 @@ func main() {
 func setup(msg *irc.Message, snd irc.Sender) {
 	switch msg.Command {
 	case irc.RPL_WELCOME:
-		log.Printf("connected to %s (%s)\n", cfg.Server, msg.Prefix.Name)
+		log.Printf("connected to IRC server %s (%s)\n", cfg.Server, msg.Prefix.Name)
 		out := &irc.Message{Command: irc.JOIN, Params: []string{cfg.Channel}}
 		if err := snd.Send(out); err != nil {
 			log.Println(err)
@@ -253,7 +253,7 @@ func connectPlug() error {
 	}
 	rpcc, err = rpc.Dial("tcp", cfg.Address)
 	if err == nil {
-		log.Println("connected to bortplug")
+		log.Printf("connected to bort (%s)\n", cfg.Address)
 	}
 	return err
 }

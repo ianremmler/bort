@@ -51,7 +51,7 @@ func main() {
 			time.Sleep(1 * time.Second)
 			continue
 		}
-		log.Println("connected to bort")
+		log.Printf("connected to bort (%s)\n", cfg.Address)
 		rpc.ServeConn(con)
 		log.Println("disconnected from bort")
 	}
