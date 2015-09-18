@@ -58,31 +58,35 @@ func main() {
 	}
 	go pollPushes()
 	for {
-		con, err := irc.Dial(cfg.Server)
-		if err != nil {
-			log.Println(err)
-			time.Sleep(time.Second)
-			continue
-		}
-
-		botc = bot.NewClient(con, handleMessage)
-		if botc == nil {
-			continue
-		}
-		botc.Identify(cfg.Nick, cfg.Nick, cfg.Nick)
-		botc.Wait()
-
-		mut.Lock()
-		isLive = false
-		mut.Unlock()
+		run()
 	}
 }
 
-// setup looks for a welcome response, joins the channel, and connects to bortplug
+// run starts the bot
+func run() {
+	con, err := irc.Dial(cfg.Server)
+	if err != nil {
+		log.Println(err)
+		time.Sleep(time.Second)
+		return
+	}
+
+	if botc = bot.NewClient(con, handleMessage); botc == nil {
+		return
+	}
+	botc.Identify(cfg.Nick, cfg.Nick, cfg.Nick)
+	botc.Wait()
+
+	mut.Lock()
+	isLive = false
+	mut.Unlock()
+}
+
+// setup looks for a welcome response, joins the channel, and connects to bortplug.
 func setup(msg *irc.Message, snd irc.Sender) {
 	switch msg.Command {
 	case irc.RPL_WELCOME:
-		log.Printf("connected to IRC server %s (%s)\n", cfg.Server, msg.Prefix.Name)
+		log.Printf("connected to IRC server %s (%s)\n", cfg.Server, msg.Name)
 		out := &irc.Message{Command: irc.JOIN, Params: []string{cfg.Channel}}
 		if err := snd.Send(out); err != nil {
 			log.Println(err)
@@ -94,12 +98,11 @@ func setup(msg *irc.Message, snd irc.Sender) {
 		if len(msg.Params) > 0 {
 			log.Printf("joined %s\n", msg.Params[0])
 		}
-		connectPlug()
 		isLive = true
 	}
 }
 
-// handleMessage processes incoming IRC messages
+// handleMessage processes incoming IRC messages.
 func handleMessage(msg *irc.Message, snd irc.Sender) {
 	mut.Lock()
 	defer mut.Unlock()
@@ -108,27 +111,17 @@ func handleMessage(msg *irc.Message, snd irc.Sender) {
 		setup(msg, snd)
 		return
 	}
+	if connectPlug() != nil {
+		return
+	}
 
 	in := convertMsg(msg)
 	msgs := []bort.Message{}
-	if rpcc == nil && connectPlug() != nil {
-		return
-	}
 	if err := rpcc.Call("Plugin.Process", in, &msgs); err != nil {
-		switch err {
-		case rpc.ErrShutdown, io.EOF, io.ErrUnexpectedEOF:
-			log.Println("disconnected from bortplug")
-			connectPlug()
-		default:
-			log.Println(err)
-		}
+		handleRPCError(err)
 		return
 	}
-	for i := range msgs {
-		if err := send(snd, &msgs[i]); err != nil {
-			log.Println(err)
-		}
-	}
+	sendMessages(msgs)
 }
 
 // deliverPushes periodically fetches and handles messages pushed by plugins.
@@ -136,26 +129,34 @@ func deliverPushes() {
 	mut.Lock()
 	defer mut.Unlock()
 
-	if !isLive {
+	if !isLive || connectPlug() != nil {
 		return
-	}
-	if rpcc == nil {
-		if connectPlug() != nil {
-			return
-		}
 	}
 
 	msgs := []bort.Message{}
 	if err := rpcc.Call("Plugin.Pull", struct{}{}, &msgs); err != nil {
-		switch err {
-		case rpc.ErrShutdown, io.EOF, io.ErrUnexpectedEOF:
-			log.Println("disconnected from bortplug")
-			connectPlug()
-		default:
-			log.Println(err)
-		}
+		handleRPCError(err)
 		return
 	}
+	sendMessages(msgs)
+}
+
+// handleRPCError handles errors from RPC calls.
+func handleRPCError(err error) {
+	switch err {
+	case nil:
+	case rpc.ErrShutdown, io.EOF, io.ErrUnexpectedEOF:
+		log.Println("disconnected from bortplug")
+		rpcc.Close()
+		rpcc = nil
+		connectPlug()
+	default:
+		log.Println(err)
+	}
+}
+
+// sendMessages sends a slice of messages to the server.
+func sendMessages(msgs []bort.Message) {
 	for i := range msgs {
 		if msgs[i].Context == "" {
 			msgs[i].Context = cfg.Channel
@@ -175,7 +176,7 @@ func pollPushes() {
 	}
 }
 
-// send sends an IRC message according to its content.
+// send sends an IRC message to the server according to its content.
 func send(snd irc.Sender, in *bort.Message) error {
 	base := irc.Message{Command: irc.PRIVMSG, Params: []string{in.Context}}
 	switch in.Type {
@@ -198,7 +199,7 @@ func send(snd irc.Sender, in *bort.Message) error {
 	return nil
 }
 
-// convertMsg converts an irc.Message to a bort.Message
+// convertMsg converts an irc.Message to a bort.Message.
 func convertMsg(imsg *irc.Message) *bort.Message {
 	bmsg := &bort.Message{
 		Context: cfg.Channel,
@@ -209,13 +210,13 @@ func convertMsg(imsg *irc.Message) *bort.Message {
 		Params:  append([]string(nil), imsg.Params...),
 		Text:    imsg.Trailing,
 	}
-	if len(imsg.Params) > 0 && imsg.Params[0] != cfg.Channel {
-		bmsg.Context = imsg.Name
+	if len(bmsg.Params) > 0 && bmsg.Params[0] != cfg.Channel {
+		bmsg.Context = bmsg.Nick
 	}
-	switch imsg.Command {
+	switch bmsg.IRCCmd {
 	case irc.PRIVMSG:
 		// handle actions
-		if tag, text, ok := ctcp.Decode(imsg.Trailing); ok && tag == ctcp.ACTION {
+		if tag, text, ok := ctcp.Decode(bmsg.Text); ok && tag == ctcp.ACTION {
 			bmsg.Type = bort.Action
 			bmsg.Text = text
 			break
@@ -237,20 +238,21 @@ func convertMsg(imsg *irc.Message) *bort.Message {
 		}
 	case irc.JOIN:
 		bmsg.Type = bort.Join
-		bmsg.Text = imsg.Name
+		bmsg.Text = bmsg.Nick
 	case irc.PART:
 		bmsg.Type = bort.Part
-		bmsg.Text = imsg.Name
+		bmsg.Text = bmsg.Nick
 	}
 	return bmsg
 }
 
 // connectPlug connects to bortplug's RPC socket.
 func connectPlug() error {
-	var err error
 	if rpcc != nil {
-		rpcc.Close()
+		return nil
 	}
+
+	var err error
 	rpcc, err = rpc.Dial("tcp", cfg.Address)
 	if err == nil {
 		log.Printf("connected to bort (%s)\n", cfg.Address)
