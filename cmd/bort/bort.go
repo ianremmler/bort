@@ -96,7 +96,7 @@ func setup(msg *irc.Message, snd irc.Sender) {
 			break
 		}
 		if len(msg.Params) > 0 {
-			log.Printf("joined %s\n", msg.Params[0])
+			log.Printf("joined %s as %s\n", msg.Params[0], msg.Name)
 		}
 		isLive = true
 	}
@@ -255,7 +255,7 @@ func connectPlug() error {
 	var err error
 	rpcc, err = rpc.Dial("tcp", cfg.Address)
 	if err == nil {
-		log.Printf("connected to bort (%s)\n", cfg.Address)
+		log.Printf("connected to bortplug (%s)\n", cfg.Address)
 	}
 	return err
 }
