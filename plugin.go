@@ -74,14 +74,11 @@ func (p *Plugin) Process(in *Message, msgs *[]Message) error { // rpc
 
 // Pull fetches queued messages pushed by plugins.
 func (p *Plugin) Pull(dummy struct{}, msgs *[]Message) error { // rpc
-	for {
-		select {
-		case msg := <-outbox:
-			*msgs = append(*msgs, msg)
-		default:
-			return nil
-		}
+	n := len(outbox)
+	for i := 0; i < n; i++ {
+		*msgs = append(*msgs, <-outbox)
 	}
+	return nil
 }
 
 // Push enqueues an outgoing message pushed by a plugin.
