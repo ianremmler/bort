@@ -9,8 +9,10 @@ import (
 )
 
 const (
-	table          = "┻━┻"
+	tableUp        = "┻━┻"
+	tableDown      = "┬─┬"
 	defaultFlipper = "(ノಠ益ಠ)ノ彡 "
+	defaultChiller = " ノ(º__ºノ)"
 )
 
 var flipTable = map[rune]rune{
@@ -49,10 +51,12 @@ var flipTable = map[rune]rune{
 
 var cfg = &Config{
 	Flipper: defaultFlipper,
+	Chiller: defaultChiller,
 }
 
 type Config struct {
 	Flipper string
+	Chiller string
 }
 
 func init() {
@@ -61,6 +65,7 @@ func init() {
 	}
 	bort.RegisterSetup(setup)
 	bort.RegisterCommand("flip", "flip text (or tables by default)", Flip)
+	bort.RegisterCommand("chill", "unflip text (or tables by default)", Chill)
 }
 
 // Flip draws the "emoji table flip guy" flipping the given text, or a table if
@@ -70,10 +75,24 @@ func Flip(in, out *bort.Message) error {
 	if len(in.Args) > 0 {
 		flipped = flip(in.Args)
 	} else {
-		flipped = table
+		flipped = tableUp
 	}
 	out.Type = bort.PrivMsg
 	out.Text = cfg.Flipper + flipped
+	return nil
+}
+
+// Chill draws the "emoji table flip guy" unflipping the given text, or a table if
+// no text is provided.
+func Chill(in, out *bort.Message) error {
+	text := ""
+	if len(in.Args) > 0 {
+		text = in.Args
+	} else {
+		text = tableDown
+	}
+	out.Type = bort.PrivMsg
+	out.Text = text + cfg.Chiller
 	return nil
 }
 
