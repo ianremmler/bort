@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"sort"
 	"text/tabwriter"
+
+	"github.com/hashicorp/hcl"
 )
 
 var (
@@ -19,9 +21,8 @@ var (
 	help       string
 )
 
-// SetupFunc provides a means for plugins to inspect global configuration data
-// and initialize themselves
-type SetupFunc func(cfgData []byte) error
+// SetupFunc provides a means for plugins to initialize themselves
+type SetupFunc func() error
 
 // Plugin provides RPC calls for bort to pass messages to bortplug for
 // handling, and to retrieve pending push messages.
@@ -166,7 +167,7 @@ func PluginInit(outboxSize uint) {
 	outbox = make(chan Message, outboxSize)
 
 	for _, fn := range setupFuncs {
-		if err := fn(configData); err != nil {
+		if err := fn(); err != nil {
 			log.Println(err)
 		}
 	}
@@ -184,4 +185,17 @@ func PluginInit(outboxSize uint) {
 	}
 	tabWrite.Flush()
 	help = buf.String()
+}
+
+// ConfigPlugin populates cfg with plugin-specific options loaded from the
+// configuration file
+func ConfigPlugin(name string, cfg interface{}) error {
+	if hclCfg == nil {
+		return nil
+	}
+	obj := hclCfg.Get(name, true)
+	if obj == nil {
+		return nil
+	}
+	return hcl.DecodeObject(cfg, obj)
 }

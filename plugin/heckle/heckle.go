@@ -7,7 +7,6 @@
 package heckle
 
 import (
-	"encoding/json"
 	"log"
 	"strings"
 
@@ -28,10 +27,8 @@ func responder(retort string) bort.HandleFunc {
 	}
 }
 
-func setup(cfgData []byte) error {
-	if err := json.Unmarshal(cfgData, &struct {
-		retortMap `json:"heckle"`
-	}{retorts}); err != nil {
+func setup() error {
+	if err := bort.ConfigPlugin("heckle", &retorts); err != nil {
 		return err
 	}
 	for watch, retort := range retorts {

@@ -17,10 +17,14 @@
 package bort
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os/user"
 	"path/filepath"
+
+	"github.com/hashicorp/hcl"
+	hclhcl "github.com/hashicorp/hcl/hcl"
 )
 
 const (
@@ -30,7 +34,7 @@ const (
 )
 
 var (
-	configData     []byte
+	hclCfg         *hclhcl.Object
 	defaultCfgFile string
 )
 
@@ -68,17 +72,20 @@ type Message struct {
 // HandleFunc provides an interface for handling IRC messages.
 type HandleFunc func(in, out *Message) error
 
-// LoadConfig loads the given or default config file and returns the raw JSON
-// data.
-func LoadConfig(cfgFile string) ([]byte, error) {
+// LoadConfig loads the given or default config file
+func LoadConfig(cfg interface{}, cfgFile string) error {
 	if cfgFile == "" {
 		cfgFile = defaultCfgFile
 	}
 	cfgData, err := ioutil.ReadFile(cfgFile)
-	if err == nil {
-		configData = cfgData
+	if err != nil {
+		return err
 	}
-	return configData, err
+	hclCfg, err = hcl.Parse(string(cfgData))
+	if err != nil {
+		return fmt.Errorf("%s: %s", cfgFile, err)
+	}
+	return hcl.DecodeObject(cfg, hclCfg)
 }
 
 func init() {

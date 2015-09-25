@@ -3,7 +3,6 @@
 package flip
 
 import (
-	"encoding/json"
 	"strings"
 
 	"github.com/ianremmler/bort"
@@ -92,8 +91,6 @@ func flip(text string) string {
 	return out
 }
 
-func setup(cfgData []byte) error {
-	return json.Unmarshal(cfgData, &struct {
-		*Config `json:"flip"`
-	}{cfg})
+func setup() error {
+	return bort.ConfigPlugin("flip", cfg)
 }

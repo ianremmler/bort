@@ -3,7 +3,6 @@
 package urltitle
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 	"strings"
@@ -57,10 +56,8 @@ func extractTitle(in, out *bort.Message) error {
 	return nil
 }
 
-func setup(cfgData []byte) error {
-	return json.Unmarshal(cfgData, &struct {
-		*Config `json:"urltitle"`
-	}{cfg})
+func setup() error {
+	return bort.ConfigPlugin("urltitle", cfg)
 }
 
 func init() {
