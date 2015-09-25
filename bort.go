@@ -81,8 +81,7 @@ func LoadConfig(cfg interface{}, cfgFile string) error {
 	if err != nil {
 		return err
 	}
-	hclCfg, err = hcl.Parse(string(cfgData))
-	if err != nil {
+	if hclCfg, err = hcl.Parse(string(cfgData)); err != nil {
 		return fmt.Errorf("%s: %s", cfgFile, err)
 	}
 	return hcl.DecodeObject(cfg, hclCfg)
