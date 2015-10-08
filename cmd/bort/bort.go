@@ -104,6 +104,10 @@ func setup(msg *irc.Message, snd irc.Sender) {
 
 // handleMessage processes incoming IRC messages.
 func handleMessage(msg *irc.Message, snd irc.Sender) {
+	if msg == nil || msg.Prefix == nil {
+		return
+	}
+
 	mut.Lock()
 	defer mut.Unlock()
 
