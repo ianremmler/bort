@@ -105,8 +105,7 @@ type matcher struct {
 }
 
 // RegisterSetup registers a function to be run once bort has connected and
-// joind.  cfgData contains the configuration file JSON data.  Plugins should
-// typically call this from init() to ensure fn called.
+// joined.  Plugins should typically call this from init() to ensure fn called.
 func RegisterSetup(fn SetupFunc) {
 	setupFuncs = append(setupFuncs, fn)
 }
