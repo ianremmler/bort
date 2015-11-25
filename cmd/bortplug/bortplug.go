@@ -19,7 +19,7 @@ var (
 )
 
 // configuration, initialized to defaults
-var cfg = Config{
+var cfg = &Config{
 	Address:    bort.DefaultAddress,
 	OutboxSize: 10,
 }
@@ -58,7 +58,10 @@ func main() {
 
 // config overrides defaults with config file and flag values.
 func config() {
-	if err := bort.LoadConfig(&cfg, cfgFile); err != nil {
+	if err := bort.LoadConfig(cfgFile); err != nil {
+		log.Println(err)
+	}
+	if err := bort.GetConfig(cfg); err != nil {
 		log.Println(err)
 	}
 	flag.Visit(func(f *flag.Flag) {

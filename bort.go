@@ -9,22 +9,19 @@
 // asynchronously.  Plugins are compiled into the bortplug command.  To enable
 // a plugin, add 'import _ "plugin_import_path"' to cmd/bortplug/plugins.go.
 //
-// Bort looks for a configuration file in ~/.config/bort/bort.conf, which can
-// be overridden with a command line parameter.  Bort prioritizes command line
-// parameter values, followed by configuration file, and finally, default
+// Bort looks for a JSON configuration file in ~/.config/bort/bort.conf, which
+// can be overridden with a command line parameter.  Bort prioritizes command
+// line parameter values, followed by configuration file, and finally, default
 // values.  Plugins have access to the configuration file data, and may look
 // for values of an appropriate key.
 package bort
 
 import (
-	"fmt"
+	"encoding/json"
 	"io/ioutil"
 	"log"
 	"os/user"
 	"path/filepath"
-
-	"github.com/hashicorp/hcl"
-	hclhcl "github.com/hashicorp/hcl/hcl"
 )
 
 const (
@@ -34,7 +31,7 @@ const (
 )
 
 var (
-	hclCfg         *hclhcl.Object
+	configData     []byte
 	defaultCfgFile string
 )
 
@@ -73,7 +70,7 @@ type Message struct {
 type HandleFunc func(in, out *Message) error
 
 // LoadConfig loads the given or default config file
-func LoadConfig(cfg interface{}, cfgFile string) error {
+func LoadConfig(cfgFile string) error {
 	if cfgFile == "" {
 		cfgFile = defaultCfgFile
 	}
@@ -81,10 +78,13 @@ func LoadConfig(cfg interface{}, cfgFile string) error {
 	if err != nil {
 		return err
 	}
-	if hclCfg, err = hcl.Parse(string(cfgData)); err != nil {
-		return fmt.Errorf("%s: %s", cfgFile, err)
-	}
-	return hcl.DecodeObject(cfg, hclCfg)
+	configData = cfgData
+	return nil
+}
+
+// GetConfig populates cfg with data from the configuration file
+func GetConfig(cfg interface{}) error {
+	return json.Unmarshal(configData, cfg)
 }
 
 func init() {

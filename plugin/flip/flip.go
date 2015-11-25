@@ -111,5 +111,5 @@ func flip(text string) string {
 }
 
 func setup() error {
-	return bort.ConfigPlugin("flip", cfg)
+	return bort.GetConfig(&struct{ Flip *Config }{cfg})
 }

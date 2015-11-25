@@ -8,8 +8,6 @@ import (
 	"regexp"
 	"sort"
 	"text/tabwriter"
-
-	"github.com/hashicorp/hcl"
 )
 
 var (
@@ -184,17 +182,4 @@ func PluginInit(outboxSize uint) {
 	}
 	tabWrite.Flush()
 	help = buf.String()
-}
-
-// ConfigPlugin populates cfg with plugin-specific options loaded from the
-// configuration file
-func ConfigPlugin(name string, cfg interface{}) error {
-	if hclCfg == nil {
-		return nil
-	}
-	obj := hclCfg.Get(name, true)
-	if obj == nil {
-		return nil
-	}
-	return hcl.DecodeObject(cfg, obj)
 }

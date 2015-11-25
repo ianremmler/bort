@@ -28,7 +28,7 @@ func responder(retort string) bort.HandleFunc {
 }
 
 func setup() error {
-	if err := bort.ConfigPlugin("heckle", &retorts); err != nil {
+	if err := bort.GetConfig(&struct{ Retorts retortMap }{retorts}); err != nil {
 		return err
 	}
 	for watch, retort := range retorts {

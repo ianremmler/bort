@@ -57,7 +57,7 @@ func extractTitle(in, out *bort.Message) error {
 }
 
 func setup() error {
-	return bort.ConfigPlugin("urltitle", cfg)
+	return bort.GetConfig(&struct{ Urltitle *Config }{cfg})
 }
 
 func init() {
