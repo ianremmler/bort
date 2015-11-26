@@ -70,7 +70,7 @@ type Message struct {
 type HandleFunc func(in, out *Message) error
 
 // LoadConfig loads the given or default config file
-func LoadConfig(cfgFile string) error {
+func LoadConfig(cfg interface{}, cfgFile string) error {
 	if cfgFile == "" {
 		cfgFile = defaultCfgFile
 	}
@@ -79,7 +79,7 @@ func LoadConfig(cfgFile string) error {
 		return err
 	}
 	configData = cfgData
-	return nil
+	return GetConfig(cfg)
 }
 
 // GetConfig populates cfg with data from the configuration file
