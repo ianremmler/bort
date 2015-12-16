@@ -6,17 +6,22 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/ianremmler/bort"
 	"github.com/mvdan/xurls"
 	"golang.org/x/net/html"
 )
 
-var cfg = &Config{}
+var (
+	cfg    = &Config{Timeout: 5}
+	client = &http.Client{}
+)
 
 type Config struct {
-	Prefix string
-	Suffix string
+	Prefix  string
+	Suffix  string
+	Timeout uint
 }
 
 func findNode(node *html.Node, path ...string) *html.Node {
@@ -34,7 +39,7 @@ func findNode(node *html.Node, path ...string) *html.Node {
 }
 
 func extractTitle(in, out *bort.Message) error {
-	resp, err := http.Get(in.Match)
+	resp, err := client.Get(in.Match)
 	if err != nil {
 		return nil
 	}
@@ -57,7 +62,11 @@ func extractTitle(in, out *bort.Message) error {
 }
 
 func setup() error {
-	return bort.GetConfig(&struct{ Urltitle *Config }{cfg})
+	if err := bort.GetConfig(&struct{ Urltitle *Config }{cfg}); err != nil {
+		return err
+	}
+	client.Timeout = time.Duration(cfg.Timeout) * time.Second
+	return nil
 }
 
 func init() {
