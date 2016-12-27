@@ -193,7 +193,7 @@ func send(snd irc.Sender, in *bort.Message) error {
 			snd.Send(&out)
 		}
 	case bort.Action:
-		text := strings.SplitN(in.Text+"\n", "\n", 2)[0]
+		text := strings.SplitN(in.Text, "\n", 2)[0]
 		out := base
 		out.Trailing = ctcp.Action(text)
 		snd.Send(&out)

@@ -55,7 +55,7 @@ func extractTitle(in, out *bort.Message) error {
 	if title != nil && title.FirstChild != nil {
 		out.Type = bort.PrivMsg
 		text := strings.TrimSpace(title.FirstChild.Data)
-		text = strings.SplitN(text+"\n", "\n", 2)[0] // first line
+		text = strings.SplitN(text, "\n", 2)[0] // first line
 		out.Text = cfg.Prefix + text + cfg.Suffix
 	}
 	return nil
